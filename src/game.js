@@ -208,23 +208,21 @@
     ctx.imageSmoothingEnabled = false;
   }
 
-  // Random, and deliberately repetitive: most checkpoints show a Лёша the
-  // player already has, so the collection fills up over many runs instead of
-  // handing everything over at once. Never the same one twice in a row.
+  // Random, but leaning towards photos this player has not collected yet, and
+  // never the same one twice in a row while there is a choice.
   function pickCheckpointPhoto() {
     const all = Collection.all();
     if (!all.length) return null;
     const missing = Collection.missing();
-    const owned = all.filter((slot) => Collection.has(slot));
-
-    let pool;
-    if (!missing.length) pool = all;                       // everything found
-    else if (!owned.length) pool = missing;                // nothing found yet
-    else pool = Math.random() < 0.45 ? missing : owned;
-
-    if (pool.length > 1 && game.lastPhoto) {
+    let pool = missing.length && Math.random() < 0.7 ? missing : all;
+    if (game.lastPhoto) {
+      // keep the guard working even when the pool narrows down to one photo
       const rest = pool.filter((slot) => slot !== game.lastPhoto);
       if (rest.length) pool = rest;
+      else {
+        const others = all.filter((slot) => slot !== game.lastPhoto);
+        if (others.length) pool = others;
+      }
     }
     return pool[Math.floor(Math.random() * pool.length)];
   }
