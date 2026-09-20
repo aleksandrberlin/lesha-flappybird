@@ -277,6 +277,27 @@ SPIDER = {
     ],
 }
 
+# The golden arches, the other thing that hands out a life.
+MAC = {
+    "w": 16,
+    "pal": {"Y": "#ffc21a", "y": "#e09a00", "D": "#7a5000"},
+    "rows": [
+        "...DDD....DDD...",
+        "..DYYYD..DYYYD..",
+        ".DYYYYYDDYYYYYD.",
+        ".DYYYYYYYYYYYYD.",
+        "DYYYYYYYYYYYYYYD",
+        "DYYYYYDDDDYYYYYD",
+        "DYYYYYD..DYYYYYD",
+        "DYYYYYD..DYYYYYD",
+        "DYYYYyD..DyYYYYD",
+        "DYYYYyD..DyYYYYD",
+        "DYYYYyD..DyYYYYD",
+        "DYYYYyD..DyYYYYD",
+        ".DDDDD....DDDDD.",
+    ],
+}
+
 # Heart used for the extra lives Katy hands out.
 HEART = {
     "w": 7,
@@ -382,7 +403,7 @@ def main():
         "katy": KATY, "colaCap": COLA_CAP, "colaBody": COLA_BODY,
         "gullUp": GULL_UP, "gullDown": GULL_DOWN,
         "droneA": DRONE_A, "droneB": DRONE_B,
-        "heart": HEART, "spider": SPIDER,
+        "heart": HEART, "spider": SPIDER, "mac": MAC,
     }
     for name, sp in sprites.items():
         check(sp, name)

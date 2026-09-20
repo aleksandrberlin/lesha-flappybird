@@ -257,5 +257,28 @@ const SPRITE_DATA = {
       "..RB....BR....",
       "..RR....RR...."
     ]
+  },
+  "mac": {
+    "w": 16,
+    "pal": {
+      "Y": "#ffc21a",
+      "y": "#e09a00",
+      "D": "#7a5000"
+    },
+    "rows": [
+      "...DDD....DDD...",
+      "..DYYYD..DYYYD..",
+      ".DYYYYYDDYYYYYD.",
+      ".DYYYYYYYYYYYYD.",
+      "DYYYYYYYYYYYYYYD",
+      "DYYYYYDDDDYYYYYD",
+      "DYYYYYD..DYYYYYD",
+      "DYYYYYD..DYYYYYD",
+      "DYYYYyD..DyYYYYD",
+      "DYYYYyD..DyYYYYD",
+      "DYYYYyD..DyYYYYD",
+      "DYYYYyD..DyYYYYD",
+      ".DDDDD....DDDDD."
+    ]
   }
 };

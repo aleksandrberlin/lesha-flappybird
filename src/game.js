@@ -73,9 +73,26 @@
   // ------------------------------------------------------------------- canvas
   const canvas = document.getElementById("game");
   const ctx = canvas.getContext("2d");
-  canvas.width = W;
-  canvas.height = H;
-  ctx.imageSmoothingEnabled = false;
+
+  // The canvas keeps its 320x480 coordinate system, but the backing store is a
+  // whole-number multiple of it. Sprites still land on exact pixel squares, and
+  // the photos on the checkpoint and collection screens get real resolution
+  // instead of being blown up with the rest of the pixel art.
+  let backing = 0;
+
+  function setBacking(scale) {
+    const want = Math.max(1, Math.min(4, Math.round(scale)));
+    if (want === backing) return;
+    backing = want;
+    canvas.width = W * want;
+    canvas.height = H * want;
+    // resizing a canvas resets its context, so the transform and the smoothing
+    // flag have to be set again right here
+    ctx.setTransform(want, 0, 0, want, 0, 0);
+    ctx.imageSmoothingEnabled = false;
+  }
+
+  setBacking(window.devicePixelRatio || 1);
 
   function makeCanvas(w, h) {
     const c = document.createElement("canvas");
@@ -128,6 +145,8 @@
   const droneTiny = buildSprite(SP.droneA, 1);
   const spiderSprite = buildSprite(SP.spider, 2);
   const spiderTiny = buildSprite(SP.spider, 1);
+  const macSprite = buildSprite(SP.mac, 2);
+  const macTiny = buildSprite(SP.mac, 1);
   const heartSprite = buildSprite(SP.heart, 2);
   const heartTiny = buildSprite(SP.heart, 1);
   const colaCap = buildSprite(SP.colaCap, COLA_SCALE);
@@ -180,17 +199,25 @@
       return;
     }
     ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
     ctx.drawImage(frame, x, y, size, size);
     ctx.imageSmoothingEnabled = false;
   }
 
-  // Random, but leaning towards photos this player has not collected yet, and
-  // never the same one twice in a row while there is a choice.
+  // Random, and deliberately repetitive: most checkpoints show a Лёша the
+  // player already has, so the collection fills up over many runs instead of
+  // handing everything over at once. Never the same one twice in a row.
   function pickCheckpointPhoto() {
     const all = Collection.all();
     if (!all.length) return null;
     const missing = Collection.missing();
-    let pool = missing.length && Math.random() < 0.7 ? missing : all;
+    const owned = all.filter((slot) => Collection.has(slot));
+
+    let pool;
+    if (!missing.length) pool = all;                       // everything found
+    else if (!owned.length) pool = missing;                // nothing found yet
+    else pool = Math.random() < 0.45 ? missing : owned;
+
     if (pool.length > 1 && game.lastPhoto) {
       const rest = pool.filter((slot) => slot !== game.lastPhoto);
       if (rest.length) pool = rest;
@@ -682,11 +709,17 @@
     return pool.length ? pool[Math.floor(Math.random() * pool.length)] : null;
   }
 
-  // Katy floats through as a pickup: catching her is worth an extra life.
+  // Two pickups float through, both worth an extra life: Katy and the arches.
   function spawnBonus() {
+    const kind = Math.random() < 0.5 ? "katy" : "mac";
+    const w = kind === "katy" ? KATY_W : macSprite.width;
+    const h = kind === "katy" ? KATY_H : macSprite.height;
     const spawnX = W + 30;
     const y = 70 + Math.random() * (GROUND_Y - 200);
     bonuses.push({
+      kind: kind,
+      w: w,
+      h: h,
       x: spawnX,
       baseY: y,
       y: y,
@@ -695,7 +728,7 @@
       vx: fairSpeed(spawnX, speed() * 0.9, speed() * 1.5),
       taken: false,
     });
-    Sfx.katy();
+    if (kind === "katy") Sfx.katy(); else Sfx.swoosh();
   }
 
   function burst(x, y, count, colors, power) {
@@ -803,7 +836,7 @@
 
   function takeLife(bonus) {
     bonus.taken = true;
-    burst(bonus.x + KATY_W / 2, bonus.y + KATY_H / 2, 14, ["#ff4d6d", "#ffd447", "#ffffff"], 2.2);
+    burst(bonus.x + bonus.w / 2, bonus.y + bonus.h / 2, 14, ["#ff4d6d", "#ffd447", "#ffffff"], 2.2);
     if (game.lives < MAX_LIVES) {
       game.lives++;
       popup("+1 жизнь", HERO_X + 40, hero.y - 14, "#ff4d6d");
@@ -881,14 +914,14 @@
       b.x -= b.vx;
       b.y = b.baseY + Math.sin(b.t * 1.7) * b.amp;
     }
-    bonuses = bonuses.filter((b) => !b.taken && b.x + KATY_W > -40);
+    bonuses = bonuses.filter((b) => !b.taken && b.x + b.w > -40);
   }
 
   function collectBonuses() {
     const { cx, cy } = heroBox();
     for (const b of bonuses) {
       if (b.taken) continue;
-      if (circleRect(cx, cy, HERO_R + 4, b.x + 6, b.y + 8, KATY_W - 12, KATY_H - 16)) takeLife(b);
+      if (circleRect(cx, cy, HERO_R + 4, b.x + 5, b.y + 5, b.w - 10, b.h - 10)) takeLife(b);
     }
     bonuses = bonuses.filter((b) => !b.taken);
   }
@@ -1110,17 +1143,17 @@
     const y = Math.round(b.y);
     const bob = Math.sin(b.t * 3) > 0 ? 0 : 1;
 
-    // sparkles so she reads as a pickup, not as another enemy
+    // sparkles so a pickup never reads as another enemy
     ctx.fillStyle = "rgba(255,212,71,0.9)";
     for (let i = 0; i < 3; i++) {
       const a = b.t * 2 + i * 2.1;
-      const sx = Math.round(x + KATY_W / 2 + Math.cos(a) * (KATY_W / 2 + 6));
-      const sy = Math.round(y + KATY_H / 2 + Math.sin(a) * (KATY_H / 2 + 2));
+      const sx = Math.round(x + b.w / 2 + Math.cos(a) * (b.w / 2 + 6));
+      const sy = Math.round(y + b.h / 2 + Math.sin(a) * (b.h / 2 + 2));
       ctx.fillRect(sx, sy, 2, 2);
     }
-    ctx.drawImage(katySprite, x, y + bob);
+    ctx.drawImage(b.kind === "katy" ? katySprite : macSprite, x, y + bob);
     const hy = Math.round(y - 14 + Math.sin(b.t * 4) * 2);
-    ctx.drawImage(heartSprite, Math.round(x + KATY_W / 2 - heartSprite.width / 2), hy);
+    ctx.drawImage(heartSprite, Math.round(x + b.w / 2 - heartSprite.width / 2), hy);
   }
 
   function drawParticles() {
@@ -1305,10 +1338,10 @@
     });
     ctx.fillStyle = "#e4d5b4";
     ctx.fillRect(48, 246, W - 96, 2);
-    ctx.drawImage(katyTiny, 58, 254);
-    ctx.drawImage(heartTiny, 82, 262);
-    drawText(ctx, "кэти даёт", 104, 256, { scale: 1, color: COLORS.ink });
-    drawText(ctx, "дополнительную жизнь", 104, 268, { scale: 1, color: "#c41f77" });
+    ctx.drawImage(katyTiny, 52, 252);
+    ctx.drawImage(macTiny, 74, 258);
+    drawText(ctx, "кэти и макдак дают", 96, 256, { scale: 1, color: COLORS.ink });
+    drawText(ctx, "дополнительную жизнь", 96, 268, { scale: 1, color: "#c41f77" });
 
     drawText(ctx, "пробел / тап - взмах", W / 2, 374, {
       scale: 1, color: COLORS.paper, align: "center", outline: COLORS.ink,
@@ -1716,8 +1749,10 @@
     let scale = Math.min(availW / W, availH / H);
     if (!compact && scale >= 1) scale = Math.floor(scale);
     scale = Math.max(scale, 0.25);
-    canvas.style.width = Math.round(W * scale) + "px";
+    const cssW = Math.round(W * scale);
+    canvas.style.width = cssW + "px";
     canvas.style.height = Math.round(H * scale) + "px";
+    setBacking((cssW * (window.devicePixelRatio || 1)) / W);
   }
   window.addEventListener("resize", resize);
   window.addEventListener("orientationchange", () => setTimeout(resize, 150));
@@ -1750,6 +1785,7 @@
     askName: askName,
     openBoard: openBoard,
     checkpoint: currentCheckpoint,
+    pickPhoto: pickCheckpointPhoto,
     openCollection: openCollection,
     collection: () => Collection,
     loading: () => ({ total: loading.total, done: loading.done, progress: loadingProgress() }),

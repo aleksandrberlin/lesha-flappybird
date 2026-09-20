@@ -26,7 +26,7 @@ PHOTO_DIR = os.path.join(ROOT, "assets", "checkpoints")
 OUT = os.path.join(ROOT, "src", "checkpoints-data.js")
 
 
-def build_slot(slot, sources, crop, size, quality):
+def build_slot(slot, sources, crops, size, quality):
     # animations carry several frames, so they get a smaller, lighter frame size
     if size is None:
         size = 400 if len(sources) < 3 else 340
@@ -40,6 +40,8 @@ def build_slot(slot, sources, crop, size, quality):
 
     for i, source in enumerate(sources, start=1):
         img = ImageOps.exif_transpose(Image.open(source)).convert("RGB")
+        # one --crop applies to every frame; several line up with the frames
+        crop = crops[min(i - 1, len(crops) - 1)] if crops else None
         if crop:
             cx, cy, side = crop
         else:
@@ -78,14 +80,16 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("slot", nargs="?", help="slot number, e.g. 1")
     ap.add_argument("photos", nargs="*", help="source image(s); several make a loop")
-    ap.add_argument("--crop", help="centre and side of the square crop: cx,cy,side")
+    ap.add_argument("--crop", action="append",
+                    help="centre and side of the square crop: cx,cy,side "
+                         "(repeat once per frame to crop them differently)")
     ap.add_argument("--size", type=int, help="frame size in pixels")
     ap.add_argument("--quality", type=int, help="JPEG quality")
     args = ap.parse_args()
 
     if args.slot and args.photos:
-        crop = tuple(int(v) for v in args.crop.split(",")) if args.crop else None
-        build_slot(args.slot, args.photos, crop, args.size, args.quality)
+        crops = [tuple(int(v) for v in c.split(",")) for c in (args.crop or [])]
+        build_slot(args.slot, args.photos, crops, args.size, args.quality)
     write_data()
 
 
