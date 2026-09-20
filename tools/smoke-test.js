@@ -7,23 +7,48 @@ const { chromium } = require("playwright");
 
 const URL = process.argv[2] || "http://127.0.0.1:8777/index.html";
 const CHROME = process.env.CHROME_PATH || undefined;
+// Sandboxes that intercept TLS (corporate proxies, CI mitm) need this.
+const INSECURE = !!process.env.SMOKE_INSECURE;
 
 (async () => {
   const browser = await chromium.launch(CHROME ? { executablePath: CHROME } : {});
-  const page = await browser.newPage({ viewport: { width: 620, height: 880 } });
+  const context = await browser.newContext({
+    viewport: { width: 620, height: 880 },
+    ignoreHTTPSErrors: INSECURE,
+  });
+  const page = await context.newPage();
   const errors = [];
+  const netIssues = [];
   page.on("pageerror", (e) => errors.push("pageerror: " + e.message));
-  page.on("console", (m) => { if (m.type() === "error") errors.push("console: " + m.text()); });
+  page.on("console", (m) => {
+    if (m.type() !== "error") return;
+    // The game is built to survive a dead network, so a failed request is a
+    // note about the environment rather than a broken game.
+    if (/Failed to load resource|net::/.test(m.text())) netIssues.push(m.text());
+    else errors.push("console: " + m.text());
+  });
 
   await page.goto(URL);
-  await page.waitForTimeout(500);
+  await page.waitForTimeout(600);
+
+  // the game asks who is playing before anything else
+  const dialogVisible = await page.isVisible("#dialog:not(.hidden)");
+  if (dialogVisible) {
+    await page.fill("#nameInput", "БОТ");
+    await page.click(".btn--go");
+    await page.waitForTimeout(300);
+  }
 
   await page.evaluate(() => {
     const F = window.FlappyLesha;
     const L = F.layout;
-    window.__stats = { maxScore: 0, katySpawned: 0, katyDodged: 0, deaths: 0, overSeen: 0 };
+    window.__stats = {
+      maxScore: 0, katySpawned: 0, livesTaken: 0, maxLives: 1,
+      enemyKinds: {}, deaths: 0, overSeen: 0,
+    };
     let wasOver = false;
-    let katyCount = 0;
+    let bonusCount = 0;
+    let lives = 1;
 
     F.press();
     (function tick() {
@@ -31,11 +56,14 @@ const CHROME = process.env.CHROME_PATH || undefined;
       const h = F.hero;
       const st = window.__stats;
       st.maxScore = Math.max(st.maxScore, g.score);
+      st.maxLives = Math.max(st.maxLives, g.lives);
 
-      const ks = F.katies();
-      if (ks.length > katyCount) st.katySpawned += ks.length - katyCount;
-      katyCount = ks.length;
-      st.katyDodged += ks.filter((k) => k.scored && !k.counted && (k.counted = true)).length;
+      const bonuses = F.bonuses();
+      if (bonuses.length > bonusCount) st.katySpawned += bonuses.length - bonusCount;
+      bonusCount = bonuses.length;
+      if (g.state === F.STATE.PLAY && g.lives > lives) st.livesTaken++;
+      lives = g.lives;
+      for (const e of F.enemies()) st.enemyKinds[e.kind] = (st.enemyKinds[e.kind] || 0) + 1;
 
       if (g.state === F.STATE.OVER) {
         if (!wasOver) { st.deaths++; st.overSeen++; wasOver = true; }
@@ -48,9 +76,16 @@ const CHROME = process.env.CHROME_PATH || undefined;
             .filter((o) => o.x + L.COLA_W > L.HERO_X)
             .sort((a, b) => a.x - b.x)[0];
           let target = next ? next.gapTop + next.gap / 2 - L.HERO_SIZE / 2 : L.H * 0.42;
-          for (const k of ks) {
-            if (k.x < L.HERO_X + 120 && k.x + 32 > L.HERO_X - 40) {
-              target = k.y > L.H / 2 ? Math.max(80, k.y - 76) : Math.min(L.GROUND_Y - 110, k.y + 76);
+          // go for Katy, but only when no bottle is in the way right now
+          const katy = bonuses[0];
+          const bottleNear = next && next.x < L.HERO_X + 150;
+          if (katy && katy.x < L.HERO_X + 150 && katy.x > L.HERO_X - 40 &&
+              (!bottleNear || Math.abs(katy.y - target) < 70)) {
+            target = katy.y;
+          }
+          for (const e of F.enemies()) {
+            if (e.x < L.HERO_X + 110 && e.x + e.def.w > L.HERO_X - 40) {
+              target = e.y > L.H / 2 ? Math.max(70, e.y - 70) : Math.min(L.GROUND_Y - 110, e.y + 70);
             }
           }
           if (h.y + h.vy * 3 > target) F.press();
@@ -60,15 +95,28 @@ const CHROME = process.env.CHROME_PATH || undefined;
     })();
   });
 
-  await page.waitForTimeout(45000);
+  await page.waitForTimeout(60000);
   const stats = await page.evaluate(() => window.__stats);
-  await browser.close();
+  await page.evaluate(() => window.FlappyLesha.loadBoard(true));
+  await page.waitForFunction(() => !window.FlappyLesha.game.board.loading, null, { timeout: 15000 })
+    .catch(() => {});
+
+  const board = await page.evaluate(() => ({
+    rows: window.FlappyLesha.game.board.rows.length,
+    source: window.FlappyLesha.game.board.source,
+    player: window.FlappyLesha.game.player,
+  })).catch(() => ({ rows: 0, source: "?", player: "" }));
 
   const checks = [
     ["no runtime errors", errors.length === 0, errors.join(" | ")],
+    ["player name stored", !!board.player, "name " + board.player],
+    ["leaderboard loads", board.rows > 0, board.source + ", rows " + board.rows],
     ["scored points", stats.maxScore >= 3, "max score " + stats.maxScore],
-    ["katy appears", stats.katySpawned >= 1, "spawned " + stats.katySpawned],
-    ["katy can be dodged", stats.katyDodged >= 1, "dodged " + stats.katyDodged],
+    ["katy shows up", stats.katySpawned >= 1, "spawned " + stats.katySpawned],
+    ["extra life can be collected", stats.livesTaken >= 1,
+      "taken " + stats.livesTaken + ", max lives " + stats.maxLives],
+    ["flying enemies appear", Object.keys(stats.enemyKinds).length >= 1,
+      Object.keys(stats.enemyKinds).join(",") || "none"],
     ["game over works", stats.overSeen >= 1, "deaths " + stats.deaths],
   ];
   let failed = 0;
@@ -76,6 +124,10 @@ const CHROME = process.env.CHROME_PATH || undefined;
     console.log((ok ? "PASS " : "FAIL ") + name + (info ? "  (" + info + ")" : ""));
     if (!ok) failed++;
   }
+  if (netIssues.length) {
+    console.log("note: " + netIssues.length + " request(s) failed, game fell back to the local board");
+  }
   console.log(JSON.stringify(stats));
+  await browser.close();
   process.exit(failed ? 1 : 0);
 })();

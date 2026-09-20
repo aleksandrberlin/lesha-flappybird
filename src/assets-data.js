@@ -3,45 +3,47 @@ const HERO_PNG = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABz
 
 const SPRITE_DATA = {
   "katy": {
-    "w": 16,
+    "w": 18,
     "pal": {
-      "K": "#241533",
-      "k": "#3d2350",
-      "S": "#f3b189",
-      "s": "#cd8560",
+      "K": "#1b0f24",
+      "k": "#3c2350",
+      "S": "#f6c49d",
+      "s": "#d09a72",
       "W": "#ffffff",
-      "P": "#1a1024",
-      "L": "#e03a5c",
-      "D": "#ff3ea5",
-      "d": "#c41f77",
-      "M": "#ffd447",
-      "G": "#c8ccd8"
+      "B": "#39a9ea",
+      "L": "#e0284c",
+      "p": "#ef9aa4",
+      "D": "#a34bd8",
+      "d": "#7a30a8",
+      "M": "#ffd447"
     },
     "rows": [
-      ".....KKKKKK.....",
-      "....KKKKKKKK....",
-      "...KKKKKKKKKK...",
-      "...KKkkkkkkKK...",
-      "..KKKSSSSSSKKK..",
-      "..KKSSSSSSSSKK..",
-      "..KKSWPSSWPSKK..",
-      "..KKSSSSSSSSKK..",
-      "..KKSSSLLSSSKK..",
-      "..KKKSSSSSSKKK..",
-      "...KKKSSSSKKK...",
-      "...KKKKSSKKKK...",
-      "..KKDDDDDDDDKK..",
-      "..KKDDMMMMDDKK..",
-      ".KKKDDDDDDDDKKK.",
-      ".KKDDDDDDDDDDKK.",
-      "MMSDDDDDDDDDDS..",
-      "GGSDDDdddddDDS..",
-      ".GSDDDDDDDDDDS..",
-      "...DDDDDDDDDD...",
-      "...dDDDDDDDDd...",
-      "....DDDDDDDD....",
-      "...SS......SS...",
-      "...ss......ss..."
+      "......KKKKKK......",
+      "....KKKKKKKKKK....",
+      "...KKKKKKKKKKKK...",
+      "..KKKKKKKKKKKKKK..",
+      "..KKKkkkkkkkkKKK..",
+      "..KKSSSSSSSSSSKK..",
+      "..KKSSSSSSSSSSKK..",
+      "..KKSWBSSSSWBSKK..",
+      "..KKSsSSSSSSsSKK..",
+      "..KKpSSSSSSSSpKK..",
+      "..KKSSsLLLLsSSKK..",
+      "..KKSSSSSSSSSSKK..",
+      "..KKKSSSSSSSSKKK..",
+      "...KKKSSSSSSKKK...",
+      "...KKKKSSSSKKKK...",
+      "..KKKDDDDDDDDKKK..",
+      "..KKDDDDDDDDDDKK..",
+      "..KKDDDDMMDDDDKK..",
+      ".KKKDDDDDDDDDDKKK.",
+      ".KKDDDDDDDDDDDDKK.",
+      "SKKDDDDDDDDDDDDKKS",
+      "SSKDDDDddddDDDDKSS",
+      ".S.DDDDDDDDDDDD.S.",
+      "...DDDDDDDDDDDD...",
+      "....SSS....SSS....",
+      "....ss......ss...."
     ]
   },
   "colaCap": {
@@ -53,14 +55,15 @@ const SPRITE_DATA = {
       "W": "#ffffff",
       "D": "#4a0d1b",
       "M": "#e6e8f0",
-      "m": "#8d94a8"
+      "m": "#8d94a8",
+      "f": "#c41b31"
     },
     "rows": [
       "..........DmMMMmmD..........",
       "..........DmMMMmmD..........",
       "..........DmMMMmmD..........",
       "..........DmMMMmmD..........",
-      "..........DmMMMmmD..........",
+      ".........DmMMMMMmmD.........",
       "..........DrHRRrrD..........",
       "..........DrHRRrrD..........",
       "..........DrHRRrrD..........",
@@ -70,23 +73,28 @@ const SPRITE_DATA = {
       "..........DrHRRrrD..........",
       "..........DrHRRrrD..........",
       "..........DrHRRrrD..........",
-      ".........DrHRRRRrrD.........",
+      "..........DrHRRrrD..........",
       "........DrHRRRRRRrrD........",
       ".......DrHRRRRRRRRrrD.......",
-      "......DrHRRRRRRRRRRrrD......",
       ".....DrHRRRRRRRRRRRRrrD.....",
       "....DrHRRRRRRRRRRRRRRrrD....",
-      "...DrHRRRRRRRRRRRRRRRRrrD...",
       "..DrHRRRRRRRRRRRRRRRRRRrrD..",
+      ".DrHRRRRRRRRRRRRRRRRRRRRrrD.",
+      ".DrHRRRRRRRRRRRRRRRRRRRRrrD.",
+      ".DrHRRRRRRRRRRRRRRRRRRRRrrD.",
       ".DrHRRRRRRRRRRRRRRRRRRRRrrD.",
       "DrHRRRRRRRRRRRRRRRRRRRRRRrrD",
       "DrHRRRRRRRRRRRRRRRRRRRRRRrrD",
+      "DrWWWWWWWWWWRRRRRRWWWWWWRrrD",
+      "DrWWWWWWWWWWWWWRRRRRWWWWWrrD",
+      "DrHRRRWWWWWWWWWWWWWWRRRRRrrD",
+      "DrHWWWWWWWWWWWRRRRRRRRRRRrrD",
       "DrHRRRRRRRRRRRRRRRRRRRRRRrrD",
-      "DrHWWWWWWWWWWWWWWWWWWWWWWrrD",
-      "DrHWWWWWWWWWWWWWWWWWWWWWWrrD",
-      "DrHWWWWWWWWWWWWWWWWWWWWWWrrD",
       "DrHRRRRRRRRRRRRRRRRRRRRRRrrD",
-      "DrHRRRRRRRRRRRRRRRRRRRRRRrrD"
+      ".DrHRRRRRRRRRRRRRRRRRRRRrrD.",
+      ".DrHRfRRRfRRRfRRRfRRRfRRrrD.",
+      "DrHRfRRRfRRRfRRRfRRRfRRRfrrD",
+      "DrHRfRRRfRRRfRRRfRRRfRRRfrrD"
     ]
   },
   "colaBody": {
@@ -98,13 +106,153 @@ const SPRITE_DATA = {
       "W": "#ffffff",
       "D": "#4a0d1b",
       "M": "#e6e8f0",
-      "m": "#8d94a8"
+      "m": "#8d94a8",
+      "f": "#c41b31"
     },
     "rows": [
-      "DrHRRRRRRRRRRRRRRRRRRRRRRrrD",
-      "DrHRRRRRRRRRRRRRRRRRRRRRRrrD",
-      "DrHRRRRRRRRRRRRRRRRRRRRRRrrD",
-      "DrHRRRRRRRRRRRRRRRRRRRRRRrrD"
+      "DrHRfRRRfRRRfRRRfRRRfRRRfrrD",
+      "DrHRfRRRfRRRfRRRfRRRfRRRfrrD",
+      "DrHRfRRRfRRRfRRRfRRRfRRRfrrD",
+      "DrHRfRRRfRRRfRRRfRRRfRRRfrrD"
+    ]
+  },
+  "gullUp": {
+    "w": 15,
+    "pal": {
+      "W": "#ffffff",
+      "G": "#b9c4d4",
+      "g": "#8b97ab",
+      "O": "#ff9b22",
+      "K": "#241533"
+    },
+    "rows": [
+      ".........KK....",
+      "........KGG....",
+      ".......GGGG....",
+      "......GGGG.....",
+      ".....GGGG......",
+      "OOWWWWWWW......",
+      ".WWKWWWWWWW....",
+      ".WWWWWWWWWWWG..",
+      "..WWWWWWWWGG...",
+      "...WWWWWg......",
+      ".....gg........"
+    ]
+  },
+  "gullDown": {
+    "w": 15,
+    "pal": {
+      "W": "#ffffff",
+      "G": "#b9c4d4",
+      "g": "#8b97ab",
+      "O": "#ff9b22",
+      "K": "#241533"
+    },
+    "rows": [
+      "...............",
+      "...............",
+      "OOWWWWWWW......",
+      ".WWKWWWWWWW....",
+      ".WWWWWWWWWWWG..",
+      "..WWWWWWWWGG...",
+      "...GGGGg.......",
+      "....GGGG.......",
+      ".....GGGG......",
+      "......GGG......",
+      ".......KK......"
+    ]
+  },
+  "droneA": {
+    "w": 16,
+    "pal": {
+      "K": "#2b2438",
+      "k": "#4a4160",
+      "M": "#c8ccd8",
+      "W": "#ffffff",
+      "B": "#39a9ea",
+      "R": "#ff4d4d",
+      "g": "#7c8496"
+    },
+    "rows": [
+      "..ggg......ggg..",
+      ".gg..g....g..gg.",
+      "...kk......kk...",
+      "....KKKKKKKK....",
+      "...KKKKKKKKKK...",
+      "..KKKMMWWMMKKK..",
+      "..KKKMWBBWMKKK..",
+      "..KKKMMWWMMKKK..",
+      "...KKKKKKKKKK...",
+      "....KKKRRKKK....",
+      ".....kkkkkk....."
+    ]
+  },
+  "droneB": {
+    "w": 16,
+    "pal": {
+      "K": "#2b2438",
+      "k": "#4a4160",
+      "M": "#c8ccd8",
+      "W": "#ffffff",
+      "B": "#39a9ea",
+      "R": "#ff4d4d",
+      "g": "#7c8496"
+    },
+    "rows": [
+      "..g.g......g.g..",
+      ".ggggg....ggggg.",
+      "...kk......kk...",
+      "....KKKKKKKK....",
+      "...KKKKKKKKKK...",
+      "..KKKMMWWMMKKK..",
+      "..KKKMWBBWMKKK..",
+      "..KKKMMWWMMKKK..",
+      "...KKKKKKKKKK...",
+      "....KKKWWKKK....",
+      ".....kkkkkk....."
+    ]
+  },
+  "can": {
+    "w": 11,
+    "pal": {
+      "M": "#d8dce8",
+      "m": "#9aa2b4",
+      "R": "#e2243a",
+      "r": "#a8122a",
+      "W": "#ffffff",
+      "D": "#4a0d1b"
+    },
+    "rows": [
+      "..DMMMMMD..",
+      ".DMmMMMmMD.",
+      ".DMMMMMMMD.",
+      ".DrRRRRRrD.",
+      ".DrRRRRRrD.",
+      ".DrWWWWWrD.",
+      ".DrWWWWWrD.",
+      ".DrWWWWWrD.",
+      ".DrRRRRRrD.",
+      ".DrRRRRRrD.",
+      ".DrRRRRRrD.",
+      ".DmMMMMMmD.",
+      "..DMMMMMD.."
+    ]
+  },
+  "heart": {
+    "w": 7,
+    "pal": {
+      "R": "#ff4d6d",
+      "r": "#c41f47",
+      "W": "#ffd0dc"
+    },
+    "rows": [
+      ".RR.RR.",
+      "RWRRRRR",
+      "RWRRRRR",
+      "rRRRRRr",
+      ".rRRRr.",
+      "..rRr..",
+      "...r..."
     ]
   }
 };

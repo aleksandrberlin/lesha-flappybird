@@ -2,9 +2,15 @@
 <html lang="ru">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#140c1e">
+<meta name="description" content="8-битный Flappy Bird: герой — лицо с фото, враги — Кэти Перри и бутылки колы.">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>Flappy Lesha — 8-bit</title>
 <link rel="icon" href="assets/hero.png">
+<link rel="apple-touch-icon" href="assets/hero.png">
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -12,13 +18,32 @@
     <canvas id="game" width="320" height="480" aria-label="Flappy Lesha"></canvas>
     <p class="hint">
       <b>Space</b> / <b>клик</b> / <b>тап</b> — взмах &nbsp;·&nbsp; <b>P</b> — пауза &nbsp;·&nbsp;
-      <b>M</b> — звук &nbsp;·&nbsp; <b>R</b> — заново
+      <b>M</b> — звук &nbsp;·&nbsp; <b>L</b> — рейтинг &nbsp;·&nbsp; <b>N</b> — имя &nbsp;·&nbsp;
+      <b>R</b> — заново
     </p>
-    <p class="hint dim">Уворачивайся от бутылок колы и от Кэти Пэрри. За облёт Кэти дают очко.</p>
   </main>
+
+  <div id="dialog" class="dialog hidden">
+    <form id="nameForm" class="dialog__box" autocomplete="off">
+      <h1 id="nameTitle" class="dialog__title">Кто вы?</h1>
+      <p class="dialog__hint">Имя попадёт в общий рейтинг игроков</p>
+      <input id="nameInput" class="dialog__input" type="text" maxlength="12"
+             inputmode="text" autocapitalize="characters" autocorrect="off" spellcheck="false"
+             placeholder="ЛЁША" aria-label="Имя игрока">
+      <p id="nameError" class="dialog__error" role="alert"></p>
+      <div class="dialog__row">
+        <button type="submit" class="btn btn--go">Поехали</button>
+        <button type="button" id="nameCancel" class="btn">Отмена</button>
+      </div>
+    </form>
+  </div>
+
+  <script src="src/config.js"></script>
   <script src="src/assets-data.js"></script>
   <script src="src/font.js"></script>
+  <script src="src/scores.js"></script>
   <script src="src/audio.js"></script>
+  <script src="src/overlay.js"></script>
   <script src="src/game.js"></script>
 </body>
 </html>

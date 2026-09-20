@@ -11,6 +11,7 @@ The photo itself is never committed; only the pixelated sprite is.
 """
 import base64
 import json
+import math
 import os
 import sys
 
@@ -77,57 +78,177 @@ def build_hero(photo_path):
 # Every sprite is a list of equally long rows; each character is a palette key,
 # "." means transparent.
 
+# Katy: long dark hair with a fringe, blue eyes, red lips and a purple stage
+# dress with a star. She is the bonus pickup, not an enemy.
 KATY = {
-    "w": 16,
+    "w": 18,
     "pal": {
-        "K": "#241533", "k": "#3d2350", "S": "#f3b189", "s": "#cd8560",
-        "W": "#ffffff", "P": "#1a1024", "L": "#e03a5c", "D": "#ff3ea5",
-        "d": "#c41f77", "M": "#ffd447", "G": "#c8ccd8",
+        "K": "#1b0f24", "k": "#3c2350", "S": "#f6c49d", "s": "#d09a72",
+        "W": "#ffffff", "B": "#39a9ea", "L": "#e0284c", "p": "#ef9aa4",
+        "D": "#a34bd8", "d": "#7a30a8", "M": "#ffd447",
     },
     "rows": [
-        ".....KKKKKK.....",
+        "......KKKKKK......",
+        "....KKKKKKKKKK....",
+        "...KKKKKKKKKKKK...",
+        "..KKKKKKKKKKKKKK..",
+        "..KKKkkkkkkkkKKK..",
+        "..KKSSSSSSSSSSKK..",
+        "..KKSSSSSSSSSSKK..",
+        "..KKSWBSSSSWBSKK..",
+        "..KKSsSSSSSSsSKK..",
+        "..KKpSSSSSSSSpKK..",
+        "..KKSSsLLLLsSSKK..",
+        "..KKSSSSSSSSSSKK..",
+        "..KKKSSSSSSSSKKK..",
+        "...KKKSSSSSSKKK...",
+        "...KKKKSSSSKKKK...",
+        "..KKKDDDDDDDDKKK..",
+        "..KKDDDDDDDDDDKK..",
+        "..KKDDDDMMDDDDKK..",
+        ".KKKDDDDDDDDDDKKK.",
+        ".KKDDDDDDDDDDDDKK.",
+        "SKKDDDDDDDDDDDDKKS",
+        "SSKDDDDddddDDDDKSS",
+        ".S.DDDDDDDDDDDD.S.",
+        "...DDDDDDDDDDDD...",
+        "....SSS....SSS....",
+        "....ss......ss....",
+    ],
+}
+
+# A seagull off the lake, flying left. Two frames: wings up and wings down.
+GULL_PAL = {"W": "#ffffff", "G": "#b9c4d4", "g": "#8b97ab", "O": "#ff9b22", "K": "#241533"}
+GULL_UP = {
+    "w": 15,
+    "pal": GULL_PAL,
+    "rows": [
+        ".........KK....",
+        "........KGG....",
+        ".......GGGG....",
+        "......GGGG.....",
+        ".....GGGG......",
+        "OOWWWWWWW......",
+        ".WWKWWWWWWW....",
+        ".WWWWWWWWWWWG..",
+        "..WWWWWWWWGG...",
+        "...WWWWWg......",
+        ".....gg........",
+    ],
+}
+GULL_DOWN = {
+    "w": 15,
+    "pal": GULL_PAL,
+    "rows": [
+        "...............",
+        "...............",
+        "OOWWWWWWW......",
+        ".WWKWWWWWWW....",
+        ".WWWWWWWWWWWG..",
+        "..WWWWWWWWGG...",
+        "...GGGGg.......",
+        "....GGGG.......",
+        ".....GGGG......",
+        "......GGG......",
+        ".......KK......",
+    ],
+}
+
+# Paparazzi drone: dark body, camera lens, blinking light, spinning rotors.
+DRONE_PAL = {
+    "K": "#2b2438", "k": "#4a4160", "M": "#c8ccd8", "W": "#ffffff",
+    "B": "#39a9ea", "R": "#ff4d4d", "g": "#7c8496",
+}
+DRONE_A = {
+    "w": 16,
+    "pal": DRONE_PAL,
+    "rows": [
+        "..ggg......ggg..",
+        ".gg..g....g..gg.",
+        "...kk......kk...",
         "....KKKKKKKK....",
         "...KKKKKKKKKK...",
-        "...KKkkkkkkKK...",
-        "..KKKSSSSSSKKK..",
-        "..KKSSSSSSSSKK..",
-        "..KKSWPSSWPSKK..",
-        "..KKSSSSSSSSKK..",
-        "..KKSSSLLSSSKK..",
-        "..KKKSSSSSSKKK..",
-        "...KKKSSSSKKK...",
-        "...KKKKSSKKKK...",
-        "..KKDDDDDDDDKK..",
-        "..KKDDMMMMDDKK..",
-        ".KKKDDDDDDDDKKK.",
-        ".KKDDDDDDDDDDKK.",
-        "MMSDDDDDDDDDDS..",
-        "GGSDDDdddddDDS..",
-        ".GSDDDDDDDDDDS..",
-        "...DDDDDDDDDD...",
-        "...dDDDDDDDDd...",
-        "....DDDDDDDD....",
-        "...SS......SS...",
-        "...ss......ss...",
+        "..KKKMMWWMMKKK..",
+        "..KKKMWBBWMKKK..",
+        "..KKKMMWWMMKKK..",
+        "...KKKKKKKKKK...",
+        "....KKKRRKKK....",
+        ".....kkkkkk.....",
+    ],
+}
+DRONE_B = {
+    "w": 16,
+    "pal": DRONE_PAL,
+    "rows": [
+        "..g.g......g.g..",
+        ".ggggg....ggggg.",
+        "...kk......kk...",
+        "....KKKKKKKK....",
+        "...KKKKKKKKKK...",
+        "..KKKMMWWMMKKK..",
+        "..KKKMWBBWMKKK..",
+        "..KKKMMWWMMKKK..",
+        "...KKKKKKKKKK...",
+        "....KKKWWKKK....",
+        ".....kkkkkk.....",
+    ],
+}
+
+# A shaken cola can that comes in like a rocket.
+CAN = {
+    "w": 11,
+    "pal": {
+        "M": "#d8dce8", "m": "#9aa2b4", "R": "#e2243a", "r": "#a8122a",
+        "W": "#ffffff", "D": "#4a0d1b",
+    },
+    "rows": [
+        "..DMMMMMD..",
+        ".DMmMMMmMD.",
+        ".DMMMMMMMD.",
+        ".DrRRRRRrD.",
+        ".DrRRRRRrD.",
+        ".DrWWWWWrD.",
+        ".DrWWWWWrD.",
+        ".DrWWWWWrD.",
+        ".DrRRRRRrD.",
+        ".DrRRRRRrD.",
+        ".DrRRRRRrD.",
+        ".DmMMMMMmD.",
+        "..DMMMMMD..",
+    ],
+}
+
+# Heart used for the extra lives Katy hands out.
+HEART = {
+    "w": 7,
+    "pal": {"R": "#ff4d6d", "r": "#c41f47", "W": "#ffd0dc"},
+    "rows": [
+        ".RR.RR.",
+        "RWRRRRR",
+        "RWRRRRR",
+        "rRRRRRr",
+        ".rRRRr.",
+        "..rRr..",
+        "...r...",
     ],
 }
 
 # --- cola bottle --------------------------------------------------------------
-# The obstacle is a giant cola bottle: a fixed cap/neck/shoulder sprite sitting at
-# the edge of the gap plus a body slice repeated out to the edge of the screen.
+# The obstacle is a giant contour bottle: crown cap, neck, flared shoulder, the
+# white wave across the label and a fluted body slice repeated to the edge.
 COLA_W = 28
 COLA_PAL = {
     "R": "#e2243a", "r": "#a8122a", "H": "#ff6070", "W": "#ffffff",
-    "D": "#4a0d1b", "M": "#e6e8f0", "m": "#8d94a8",
+    "D": "#4a0d1b", "M": "#e6e8f0", "m": "#8d94a8", "f": "#c41b31",
 }
 
 
-def bottle_row(a, b, pal="glass", band=False):
-    """One row of bottle, filled between columns a..b inclusive."""
+def bottle_row(a, b, pal="glass", flutes=False):
+    """One row of bottle glass, filled between columns a..b inclusive."""
     row = ["."] * COLA_W
     for x in range(a, b + 1):
         if x in (a, b):
-            c = "D"                                  # outline
+            c = "D"                                  # dark outline
         elif x in (a + 1, b - 1):
             c = "r"                                  # shaded edge
         elif x == a + 2:
@@ -135,25 +256,51 @@ def bottle_row(a, b, pal="glass", band=False):
         elif x == b - 2:
             c = "r"
         else:
-            c = "W" if band else "R"
+            c = "R"
         if pal == "metal":
-            c = {"D": "D", "r": "m", "H": "M", "R": "M", "W": "M"}[c]
+            c = {"D": "D", "r": "m", "H": "M", "R": "M"}[c]
+        elif flutes and c == "R" and (x - a) % 4 == 0:
+            c = "f"                                  # the bottle's flutes
         row[x] = c
+    return "".join(row)
+
+
+def wave_row(a, b, on):
+    """A row of the white ribbon that sweeps across the label."""
+    row = list(bottle_row(a, b))
+    for x in range(a + 2, b - 1):
+        if on(x):
+            row[x] = "W"
     return "".join(row)
 
 
 def build_cola():
     neck_a, neck_b = 10, 17
-    rows = [bottle_row(neck_a, neck_b, "metal") for _ in range(5)]      # crown cap
-    rows += [bottle_row(neck_a, neck_b) for _ in range(9)]              # neck
-    for step in range(1, 11):                                           # shoulder flare
-        rows.append(bottle_row(max(neck_a - step, 0), min(neck_b + step, COLA_W - 1)))
+    rows = [bottle_row(neck_a, neck_b, "metal") for _ in range(4)]     # crown cap
+    rows.append(bottle_row(neck_a - 1, neck_b + 1, "metal"))           # cap skirt
+    rows += [bottle_row(neck_a, neck_b) for _ in range(10)]            # neck
+    # rounded shoulder: quick flare at the top, easing out to full width
+    steps = 9
+    for i in range(1, steps + 1):
+        grow = round(10 * math.sin(math.pi / 2 * i / steps))
+        rows.append(bottle_row(max(neck_a - grow, 1), min(neck_b + grow, COLA_W - 2)))
     rows += [bottle_row(0, COLA_W - 1) for _ in range(2)]
-    rows += [bottle_row(0, COLA_W - 1, band=True) for _ in range(3)]    # white label band
+
+    # the white wave, four rows of a ribbon rising to the right
+    for on in (lambda x: x < 12 or 18 <= x < 24,
+               lambda x: x < 15 or 20 <= x < 25,
+               lambda x: 6 <= x < 20,
+               lambda x: 3 <= x < 14):
+        rows.append(wave_row(0, COLA_W - 1, on))
+
     rows += [bottle_row(0, COLA_W - 1) for _ in range(2)]
+    rows.append(bottle_row(1, COLA_W - 2))                             # waist pinch
+    rows.append(bottle_row(1, COLA_W - 2, flutes=True))
+    rows += [bottle_row(0, COLA_W - 1, flutes=True) for _ in range(2)]
+
     cap = {"w": COLA_W, "pal": COLA_PAL, "rows": rows}
     body = {"w": COLA_W, "pal": COLA_PAL,
-            "rows": [bottle_row(0, COLA_W - 1) for _ in range(4)]}
+            "rows": [bottle_row(0, COLA_W - 1, flutes=True) for _ in range(4)]}
     return cap, body
 
 
@@ -172,7 +319,13 @@ def check(sprite, name):
 
 def main():
     photo = sys.argv[1] if len(sys.argv) > 1 else None
-    for name, sp in (("katy", KATY), ("colaCap", COLA_CAP), ("colaBody", COLA_BODY)):
+    sprites = {
+        "katy": KATY, "colaCap": COLA_CAP, "colaBody": COLA_BODY,
+        "gullUp": GULL_UP, "gullDown": GULL_DOWN,
+        "droneA": DRONE_A, "droneB": DRONE_B,
+        "can": CAN, "heart": HEART,
+    }
+    for name, sp in sprites.items():
         check(sp, name)
 
     hero_path = os.path.join(ROOT, "assets", "hero.png")
@@ -182,7 +335,6 @@ def main():
         print("wrote", hero_path)
     b64 = base64.b64encode(open(hero_path, "rb").read()).decode()
 
-    sprites = {"katy": KATY, "colaCap": COLA_CAP, "colaBody": COLA_BODY}
     out = os.path.join(ROOT, "src", "assets-data.js")
     os.makedirs(os.path.dirname(out), exist_ok=True)
     with open(out, "w") as fh:

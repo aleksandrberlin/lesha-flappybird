@@ -80,5 +80,18 @@ const Sfx = (function () {
       tone(200, 0.3, { to: 70, vol: 0.4, delay: 0.24 });
     },
     swoosh() { tone(300, 0.08, { to: 520, type: "triangle", vol: 0.25 }); },
+    life() { // Katy hands over a heart
+      tone(523, 0.08, { vol: 0.35 });
+      tone(784, 0.08, { vol: 0.35, delay: 0.08 });
+      tone(1046, 0.18, { vol: 0.35, delay: 0.16 });
+    },
+    shield() { // a hit that cost a life but was survived
+      tone(220, 0.16, { to: 120, vol: 0.45 });
+      noise(0.22, 0.4);
+    },
+    snap() { // paparazzi camera
+      noise(0.08, 0.35);
+      tone(1400, 0.05, { to: 900, vol: 0.2, type: "triangle" });
+    },
   };
 })();

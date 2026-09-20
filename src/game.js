@@ -29,6 +29,16 @@
 
   const BEST_KEY = "flappyLesha.best";
 
+  const MAX_LIVES = 3;
+  const INVULN = 1.5;
+
+  // The flying enemies. Katy is not here any more - she hands out lives.
+  const ENEMIES = {
+    gull:  { w: 30, h: 22, inset: 5, unlock: 2,  weight: 3, label: "чайка" },
+    can:   { w: 22, h: 26, inset: 3, unlock: 7,  weight: 2, label: "банка" },
+    drone: { w: 32, h: 22, inset: 5, unlock: 12, weight: 2, label: "дрон" },
+  };
+
   const COLORS = {
     skyTop: "#5ec2f0",
     skyMid: "#8fd8f7",
@@ -86,23 +96,37 @@
     return c;
   }
 
-  const katySprite = buildSprite(SPRITE_DATA.katy, KATY_SCALE);
-  const katySpriteFlip = (function () {
-    const { canvas: c, ctx: g } = makeCanvas(katySprite.width, katySprite.height);
-    g.translate(katySprite.width, 0);
+  function flipH(src) {
+    const { canvas: c, ctx: g } = makeCanvas(src.width, src.height);
+    g.translate(src.width, 0);
     g.scale(-1, 1);
-    g.drawImage(katySprite, 0, 0);
+    g.drawImage(src, 0, 0);
     return c;
-  })();
-  const colaCap = buildSprite(SPRITE_DATA.colaCap, COLA_SCALE);
-  const colaCapFlip = (function () {
-    const { canvas: c, ctx: g } = makeCanvas(colaCap.width, colaCap.height);
-    g.translate(0, colaCap.height);
+  }
+
+  function flipV(src) {
+    const { canvas: c, ctx: g } = makeCanvas(src.width, src.height);
+    g.translate(0, src.height);
     g.scale(1, -1);
-    g.drawImage(colaCap, 0, 0);
+    g.drawImage(src, 0, 0);
     return c;
-  })();
-  const colaBody = buildSprite(SPRITE_DATA.colaBody, COLA_SCALE);
+  }
+
+  const SP = SPRITE_DATA;
+  const katySprite = buildSprite(SP.katy, KATY_SCALE);
+  const katyTiny = buildSprite(SP.katy, 1);
+  const gullFrames = [buildSprite(SP.gullUp, 2), buildSprite(SP.gullDown, 2)];
+  const gullTiny = buildSprite(SP.gullUp, 1);
+  const droneFrames = [buildSprite(SP.droneA, 2), buildSprite(SP.droneB, 2)];
+  const droneTiny = buildSprite(SP.droneA, 1);
+  const canSprite = buildSprite(SP.can, 2);
+  const canTiny = buildSprite(SP.can, 1);
+  const heartSprite = buildSprite(SP.heart, 2);
+  const heartTiny = buildSprite(SP.heart, 1);
+  const colaCap = buildSprite(SP.colaCap, COLA_SCALE);
+  const colaCapFlip = flipV(colaCap);
+  const colaBody = buildSprite(SP.colaBody, COLA_SCALE);
+  const colaTiny = buildSprite(SP.colaCap, 1);
 
   const KATY_W = katySprite.width;
   const KATY_H = katySprite.height;
@@ -123,22 +147,91 @@
     };
   }
 
-  const cloudLayer = (function () {
-    const { canvas: c, ctx: g } = makeCanvas(W, 70);
-    const rnd = lcg(7);
-    for (let i = 0; i < 6; i++) {
-      const cx = Math.floor(rnd() * (W - 60)) + 10;
-      const cy = Math.floor(rnd() * 34) + 8;
-      const w = Math.floor(rnd() * 20) + 26;
-      g.fillStyle = COLORS.cloudShade;
-      g.fillRect(cx, cy + 8, w, 8);
-      g.fillStyle = COLORS.cloud;
-      g.fillRect(cx, cy + 4, w, 8);
-      g.fillRect(cx + 6, cy, w - 16, 8);
-      g.fillRect(cx + w - 12, cy + 2, 10, 6);
+  // Clouds are individual objects: they drift with the scenery, each at its own
+  // pace, and bob a little so the sky never looks frozen.
+  const clouds = [];
+  const birds = [];
+  let birdTimer = 3;
+
+  function makeCloud(x) {
+    return {
+      x: x,
+      baseY: 14 + Math.random() * 122,
+      w: 22 + Math.round(Math.random() * 26),
+      drift: 0.05 + Math.random() * 0.16,
+      bob: Math.random() * Math.PI * 2,
+      bobSpeed: 0.25 + Math.random() * 0.4,
+      bobAmp: 1 + Math.random() * 2.5,
+    };
+  }
+
+  function seedClouds() {
+    clouds.length = 0;
+    for (let i = 0; i < 7; i++) clouds.push(makeCloud(Math.random() * (W + 60) - 30));
+    birds.length = 0;
+    birdTimer = 2 + Math.random() * 4;
+  }
+
+  function updateSky(dt, scrollSpeed) {
+    for (const c of clouds) {
+      c.x -= scrollSpeed * 0.16 + c.drift;
+      c.bob += dt * c.bobSpeed;
+      if (c.x + c.w < -20) {
+        const fresh = makeCloud(W + 10 + Math.random() * 40);
+        c.x = fresh.x; c.baseY = fresh.baseY; c.w = fresh.w;
+        c.drift = fresh.drift; c.bobAmp = fresh.bobAmp; c.bobSpeed = fresh.bobSpeed;
+      }
     }
-    return c;
-  })();
+
+    birdTimer -= dt;
+    if (birdTimer <= 0) {
+      birdTimer = 6 + Math.random() * 9;
+      const flock = 1 + Math.floor(Math.random() * 3);
+      const y = 34 + Math.random() * 80;
+      for (let i = 0; i < flock; i++) {
+        birds.push({
+          x: W + 16 + i * (12 + Math.random() * 10),
+          y: y + (Math.random() - 0.5) * 14,
+          speed: 0.3 + Math.random() * 0.25,
+          t: Math.random() * 6,
+        });
+      }
+    }
+    for (const b of birds) {
+      b.x -= scrollSpeed * 0.22 + b.speed;
+      b.t += dt * 6;
+      b.y += Math.sin(b.t * 0.35) * 0.12;
+    }
+    for (let i = birds.length - 1; i >= 0; i--) if (birds[i].x < -14) birds.splice(i, 1);
+  }
+
+  function drawCloud(c) {
+    const x = Math.round(c.x);
+    const y = Math.round(c.baseY + Math.sin(c.bob) * c.bobAmp);
+    const w = c.w;
+    ctx.fillStyle = COLORS.cloudShade;
+    ctx.fillRect(x, y + 8, w, 6);
+    ctx.fillStyle = COLORS.cloud;
+    ctx.fillRect(x, y + 4, w, 6);
+    ctx.fillRect(x + 5, y, Math.max(8, w - 14), 6);
+    ctx.fillRect(x + w - 10, y + 2, 8, 4);
+  }
+
+  function drawBird(b) {
+    const x = Math.round(b.x);
+    const y = Math.round(b.y);
+    const up = Math.floor(b.t) % 2 === 0;
+    ctx.fillStyle = "rgba(26,16,36,0.55)";
+    if (up) {
+      ctx.fillRect(x - 3, y - 1, 2, 2);
+      ctx.fillRect(x - 1, y, 2, 2);
+      ctx.fillRect(x + 1, y - 1, 2, 2);
+    } else {
+      ctx.fillRect(x - 3, y + 1, 2, 2);
+      ctx.fillRect(x - 1, y, 2, 2);
+      ctx.fillRect(x + 1, y + 1, 2, 2);
+    }
+  }
 
   // Lake Geneva style ridge line: a few sines summed so the tile wraps cleanly.
   const mountainLayer = (function () {
@@ -211,7 +304,7 @@
   }
 
   // --------------------------------------------------------------- game state
-  const STATE = { TITLE: 0, PLAY: 1, DYING: 2, OVER: 3 };
+  const STATE = { TITLE: 0, PLAY: 1, DYING: 2, OVER: 3, BOARD: 4 };
 
   const game = {
     state: STATE.TITLE,
@@ -223,15 +316,62 @@
     flash: 0,
     paused: false,
     overTimer: 0,
-    katyTimer: 5,
-    nextKatyScore: 3,
+    katyTimer: 7,
+    enemyTimer: 5,
+    lives: 1,
+    invuln: 0,
+    player: "",
+    rank: null,
+    submitting: false,
+    dialogOpen: false,
+    boardFrom: STATE.TITLE,
+    board: { rows: [], source: Scores.online ? "cloud" : "local", loading: false, loaded: false },
   };
 
-  const hero = { y: H * 0.42, vy: 0, angle: 0 };
+  const hero = { y: H * 0.42, vy: 0, angle: 0, squash: 0 };
   let obstacles = [];
-  let katies = [];
+  let enemies = [];
+  let bonuses = [];
   let particles = [];
   let popups = [];
+
+  function loadBoard(force) {
+    if (game.board.loading || (game.board.loaded && !force)) return;
+    game.board.loading = true;
+    Scores.top().then((res) => {
+      game.board.rows = res.rows || [];
+      game.board.source = res.source;
+      game.board.loaded = true;
+      game.board.loading = false;
+    }).catch(() => { game.board.loading = false; });
+  }
+
+  function askName(force) {
+    if (game.dialogOpen) return;
+    game.dialogOpen = true;
+    NameDialog.open({ current: game.player, allowCancel: !force && !!game.player })
+      .then((name) => {
+        game.dialogOpen = false;
+        if (name) {
+          game.player = Scores.setName(name);
+          game.best = Math.max(game.best, Scores.localBest(game.player));
+          loadBoard(true);
+          Sfx.unlock();
+        }
+      });
+  }
+
+  function openBoard() {
+    if (game.state === STATE.BOARD) return;
+    game.boardFrom = game.state === STATE.OVER ? STATE.OVER : STATE.TITLE;
+    game.state = STATE.BOARD;
+    loadBoard(true);
+  }
+
+  function closeBoard() {
+    game.state = game.boardFrom;
+    if (game.state === STATE.OVER) game.overTimer = Math.max(game.overTimer, 1);
+  }
 
   function speed() {
     return Math.min(SPEED_MAX, SPEED_BASE + game.score * 0.025);
@@ -246,13 +386,17 @@
     game.shake = 0;
     game.flash = 0;
     game.overTimer = 0;
-    game.katyTimer = 5;
-    game.nextKatyScore = 3;
+    game.katyTimer = 7;
+    game.enemyTimer = 5;
+    game.lives = 1;
+    game.invuln = 0;
     hero.y = H * 0.42;
     hero.vy = 0;
     hero.angle = 0;
+    hero.squash = 0;
     obstacles = [];
-    katies = [];
+    enemies = [];
+    bonuses = [];
     particles = [];
     popups = [];
   }
@@ -281,26 +425,73 @@
     return false;
   }
 
-  function spawnKaty() {
-    const spawnX = W + 30;
-    const base = speed();
-    let vx = base * 1.45 + 0.4;
-    // Try a few approach speeds and keep the first one that meets the player
-    // between two bottles, so she is always dodgeable.
-    for (let i = 0; i <= 16; i++) {
-      const candidate = base * 1.1 + i * 0.09;
-      if (!bottleBlocksHero((spawnX - HERO_X) / candidate)) { vx = candidate; break; }
+  // Pick an approach speed that lands the flyer in an open corridor rather than
+  // inside a bottle gap, so everything on screen can actually be dodged.
+  function fairSpeed(spawnX, low, high) {
+    for (let i = 0; i <= 14; i++) {
+      const v = low + (high - low) * (i / 14);
+      if (!bottleBlocksHero((spawnX - HERO_X) / v)) return v;
     }
-    const y = 60 + Math.random() * (GROUND_Y - 190);
-    katies.push({
+    return (low + high) / 2;
+  }
+
+  function spawnEnemy(kind) {
+    const def = ENEMIES[kind];
+    const spawnX = W + 24;
+    const e = {
+      kind: kind,
+      def: def,
+      x: spawnX,
+      t: Math.random() * 6,
+      scored: false,
+    };
+    const base = speed();
+    if (kind === "gull") {
+      e.vx = fairSpeed(spawnX, base * 1.15, base * 2.1);
+      e.amp = 8 + Math.random() * 18;
+      e.freq = 1.6 + Math.random() * 1.2;
+      e.baseY = 50 + Math.random() * (GROUND_Y - 150 - e.amp * 2);
+    } else if (kind === "can") {
+      // a shaken can: slow at first, then it takes off
+      e.vx = base * 0.75;
+      e.accel = 0.05;
+      e.baseY = 60 + Math.random() * (GROUND_Y - 160);
+      e.spin = 0;
+    } else {
+      // paparazzi drone: creeps in and drifts towards the player's height
+      e.vx = fairSpeed(spawnX, base * 0.85, base * 1.5);
+      e.chase = 0.38;
+      e.flashIn = 1.4 + Math.random();
+      e.flash = 0;
+      e.baseY = 60 + Math.random() * (GROUND_Y - 170);
+    }
+    e.y = e.baseY;
+    enemies.push(e);
+    Sfx.swoosh();
+  }
+
+  function pickEnemyKind() {
+    const pool = [];
+    for (const kind in ENEMIES) {
+      if (game.score >= ENEMIES[kind].unlock) {
+        for (let i = 0; i < ENEMIES[kind].weight; i++) pool.push(kind);
+      }
+    }
+    return pool.length ? pool[Math.floor(Math.random() * pool.length)] : null;
+  }
+
+  // Katy floats through as a pickup: catching her is worth an extra life.
+  function spawnBonus() {
+    const spawnX = W + 30;
+    const y = 70 + Math.random() * (GROUND_Y - 200);
+    bonuses.push({
       x: spawnX,
       baseY: y,
       y: y,
       t: Math.random() * Math.PI * 2,
-      amp: 20 + Math.random() * 26,
-      freq: 1.4 + Math.random() * 1.2,
-      vx: vx,
-      scored: false,
+      amp: 16 + Math.random() * 20,
+      vx: fairSpeed(spawnX, speed() * 0.9, speed() * 1.5),
+      taken: false,
     });
     Sfx.katy();
   }
@@ -328,6 +519,7 @@
 
   function flap() {
     hero.vy = FLAP_V;
+    hero.squash = 1;
     Sfx.flap();
     burst(HERO_X - 8, hero.y + 10, 3, ["#ffffff", "#cfe9ff"], 1.1);
   }
@@ -335,19 +527,20 @@
   function die(cause) {
     if (game.state !== STATE.PLAY) return;
     game.state = STATE.DYING;
+    game.lives = 0;
     game.shake = 0.45;
     game.flash = 0.8;
     hero.vy = Math.min(hero.vy, -2.4);
-    if (cause === "cola") {
-      Sfx.cola();
-      burst(HERO_X, hero.y, 18, ["#e2243a", "#ff6070", "#ffffff"], 3);
-    } else if (cause === "katy") {
-      Sfx.hit();
-      burst(HERO_X, hero.y, 18, ["#ff3ea5", "#ffd447", "#ffffff"], 3);
-    } else {
-      Sfx.hit();
-      burst(HERO_X, hero.y, 14, ["#c9a05c", "#a87f3f", "#ffffff"], 2.6);
-    }
+    const debris = {
+      cola: ["#e2243a", "#ff6070", "#ffffff"],
+      gull: ["#ffffff", "#b9c4d4", "#8b97ab"],
+      can: ["#e2243a", "#d8dce8", "#ffffff"],
+      drone: ["#2b2438", "#c8ccd8", "#ff4d4d"],
+      ground: [COLORS.dirt, COLORS.dirtDark, "#ffffff"],
+    }[cause] || ["#ffffff", "#ffd447"];
+    if (cause === "cola" || cause === "can") Sfx.cola();
+    else Sfx.hit();
+    burst(HERO_X, hero.y, 18, debris, cause === "ground" ? 2.6 : 3);
   }
 
   function gameOver() {
@@ -358,6 +551,13 @@
       game.best = game.score;
       try { localStorage.setItem(BEST_KEY, String(game.best)); } catch (e) { /* private mode */ }
     }
+
+    game.rank = null;
+    game.submitting = true;
+    Scores.submit(game.player, game.score)
+      .then(() => Scores.rank(game.score))
+      .then((rank) => { game.rank = rank; game.submitting = false; loadBoard(true); })
+      .catch(() => { game.submitting = false; });
   }
 
   // --------------------------------------------------------------- collisions
@@ -369,19 +569,126 @@
     return dx * dx + dy * dy < r * r;
   }
 
+  function heroBox() {
+    return { cx: HERO_X + HERO_SIZE / 2, cy: hero.y + HERO_SIZE / 2 };
+  }
+
+  // Returns what the player ran into, or null.
   function heroHits() {
-    const cx = HERO_X + HERO_SIZE / 2;
-    const cy = hero.y + HERO_SIZE / 2;
+    const { cx, cy } = heroBox();
     for (const o of obstacles) {
       if (o.x > cx + HERO_R || o.x + COLA_W < cx - HERO_R) continue;
-      if (circleRect(cx, cy, HERO_R, o.x, -60, COLA_W, o.gapTop + 60)) return "cola";
+      if (circleRect(cx, cy, HERO_R, o.x, -60, COLA_W, o.gapTop + 60)) return { kind: "cola", obstacle: o };
       const bottom = o.gapTop + o.gap;
-      if (circleRect(cx, cy, HERO_R, o.x, bottom, COLA_W, GROUND_Y - bottom + 10)) return "cola";
+      if (circleRect(cx, cy, HERO_R, o.x, bottom, COLA_W, GROUND_Y - bottom + 10)) {
+        return { kind: "cola", obstacle: o };
+      }
     }
-    for (const k of katies) {
-      if (circleRect(cx, cy, HERO_R, k.x + 5, k.y + 6, KATY_W - 10, KATY_H - 12)) return "katy";
+    for (const e of enemies) {
+      const i = e.def.inset;
+      if (circleRect(cx, cy, HERO_R, e.x + i, e.y + i, e.def.w - i * 2, e.def.h - i * 2)) {
+        return { kind: e.kind, enemy: e };
+      }
     }
     return null;
+  }
+
+  function takeLife(bonus) {
+    bonus.taken = true;
+    burst(bonus.x + KATY_W / 2, bonus.y + KATY_H / 2, 14, ["#ff4d6d", "#ffd447", "#ffffff"], 2.2);
+    if (game.lives < MAX_LIVES) {
+      game.lives++;
+      popup("+1 жизнь", HERO_X + 40, hero.y - 14, "#ff4d6d");
+      Sfx.life();
+    } else {
+      game.score += 3;
+      popup("+3", HERO_X + 40, hero.y - 14, "#ffd447");
+      Sfx.score();
+    }
+  }
+
+  // A hit with a life left costs a heart and smashes whatever we hit, so the
+  // player is never left stuck inside the thing that just hurt them.
+  function survivedHit(hit) {
+    game.lives--;
+    game.invuln = INVULN;
+    game.shake = 0.4;
+    game.flash = 0.5;
+    hero.vy = Math.min(hero.vy, -3.2);
+    Sfx.shield();
+    popup("-1 жизнь", HERO_X + 34, hero.y - 10, "#ff5a5a");
+    if (hit.obstacle) {
+      obstacles = obstacles.filter((o) => o !== hit.obstacle);
+      burst(hit.obstacle.x + COLA_W / 2, hero.y + HERO_SIZE / 2, 22,
+        ["#e2243a", "#ff6070", "#ffffff"], 3.2);
+    }
+    if (hit.enemy) {
+      enemies = enemies.filter((e) => e !== hit.enemy);
+      burst(hit.enemy.x + hit.enemy.def.w / 2, hit.enemy.y + hit.enemy.def.h / 2, 16,
+        ["#ffffff", "#b9c4d4", "#e2243a"], 2.8);
+    }
+  }
+
+  // ------------------------------------------------------------------ enemies
+  function updateEnemies(dt) {
+    const { cy } = heroBox();
+    for (const e of enemies) {
+      e.t += dt;
+      if (e.kind === "gull") {
+        e.x -= e.vx;
+        e.y = e.baseY + Math.sin(e.t * e.freq) * e.amp;
+      } else if (e.kind === "can") {
+        e.vx = Math.min(e.vx + e.accel, 7.5);
+        e.x -= e.vx;
+        e.spin += dt * 6;
+        if (Math.random() < 0.6) {
+          particles.push({
+            x: e.x + e.def.w, y: e.y + e.def.h / 2 + (Math.random() - 0.5) * 8,
+            vx: 0.6 + Math.random(), vy: (Math.random() - 0.5) * 0.6,
+            life: 0.3 + Math.random() * 0.3, size: 2, gravity: 0.01,
+            color: Math.random() < 0.5 ? "#ffffff" : "#ffb3bd",
+          });
+        }
+      } else {
+        e.x -= e.vx;
+        const dy = cy - (e.y + e.def.h / 2);
+        e.y += Math.max(-e.chase, Math.min(e.chase, dy));
+        e.y = Math.max(16, Math.min(GROUND_Y - e.def.h - 8, e.y));
+        e.flash = Math.max(0, e.flash - dt);
+        e.flashIn -= dt;
+        if (e.flashIn <= 0 && e.x < W - 20) {
+          e.flashIn = 2.4 + Math.random();
+          e.flash = 0.16;
+          // a wink of light, not a whiteout - the player must still see the gap
+          game.flash = Math.max(game.flash, 0.14);
+          Sfx.snap();
+        }
+      }
+
+      if (!e.scored && e.x + e.def.w < HERO_X) {
+        e.scored = true;
+        game.score++;
+        Sfx.score();
+        popup("+1", HERO_X + 26, hero.y - 6, COLORS.paper);
+      }
+    }
+    enemies = enemies.filter((e) => e.x + e.def.w > -40);
+
+    for (const b of bonuses) {
+      b.t += dt;
+      b.x -= b.vx;
+      b.y = b.baseY + Math.sin(b.t * 1.7) * b.amp;
+    }
+    bonuses = bonuses.filter((b) => !b.taken && b.x + KATY_W > -40);
+  }
+
+  function collectBonuses() {
+    const { cx, cy } = heroBox();
+    for (const b of bonuses) {
+      if (b.taken) continue;
+      if (circleRect(cx, cy, HERO_R + 4, b.x + 6, b.y + 8, KATY_W - 12, KATY_H - 16)) takeLife(b);
+    }
+    bonuses = bonuses.filter((b) => !b.taken);
   }
 
   // ------------------------------------------------------------------- update
@@ -390,12 +697,17 @@
     if (game.shake > 0) game.shake = Math.max(0, game.shake - dt);
     if (game.flash > 0) game.flash = Math.max(0, game.flash - dt * 2.4);
 
-    if (game.state === STATE.TITLE) {
-      game.scroll += speed() * 0.6;
-      hero.y = H * 0.42 + Math.sin(game.time * 3) * 7;
+    // How fast the scenery slides this frame; clouds drift on top of it.
+    let scrollSpeed = 0;
+    if (game.state === STATE.TITLE || game.state === STATE.BOARD) scrollSpeed = speed() * 0.6;
+    else if (game.state === STATE.PLAY) scrollSpeed = speed();
+    game.scroll += scrollSpeed;
+    updateSky(dt, scrollSpeed);
+
+    if (game.state === STATE.TITLE || game.state === STATE.BOARD) {
+      hero.y = 138 + Math.sin(game.time * 3) * 6;
       hero.angle = Math.sin(game.time * 3) * 0.12;
     } else if (game.state === STATE.PLAY) {
-      game.scroll += speed();
       hero.vy = Math.min(MAX_FALL, hero.vy + GRAVITY);
       hero.y += hero.vy;
       hero.angle = Math.max(-0.5, Math.min(1.5, hero.vy * 0.09));
@@ -411,38 +723,36 @@
           game.score++;
           Sfx.score();
           popup("+1", HERO_X + 26, hero.y - 6, COLORS.paper);
-          if (game.score >= game.nextKatyScore) {
-            game.nextKatyScore = game.score + 3 + Math.floor(Math.random() * 2);
-            spawnKaty();
-            game.katyTimer = 7;
-          }
         }
       }
       obstacles = obstacles.filter((o) => o.x + COLA_W > -10);
 
+      // flying enemies, unlocked one kind at a time as the score grows
+      game.enemyTimer -= dt;
+      if (game.enemyTimer <= 0) {
+        game.enemyTimer = Math.max(2.6, 5.5 - game.score * 0.06) + Math.random() * 2.2;
+        const kind = pickEnemyKind();
+        if (kind && enemies.length < 3) spawnEnemy(kind);
+      }
+
+      // Katy shows up regularly while there is a life to win
       game.katyTimer -= dt;
       if (game.katyTimer <= 0) {
-        game.katyTimer = 7 + Math.random() * 4;
-        if (katies.length < 2) spawnKaty();
+        game.katyTimer = 11 + Math.random() * 7;
+        if (!bonuses.length) spawnBonus();
       }
 
-      for (const k of katies) {
-        k.t += dt * k.freq;
-        k.x -= k.vx;
-        k.y = k.baseY + Math.sin(k.t) * k.amp;
-        if (!k.scored && k.x + KATY_W < HERO_X) {
-          k.scored = true;
-          game.score++;
-          Sfx.score();
-          popup("dodged!", HERO_X + 30, hero.y - 12, "#ff9ad5");
-          burst(HERO_X + 20, hero.y, 6, ["#ff3ea5", "#ffd447"], 1.6);
-        }
-      }
-      katies = katies.filter((k) => k.x + KATY_W > -20);
+      updateEnemies(dt);
+      collectBonuses();
 
-      const hit = heroHits();
-      if (hit) die(hit);
-      else if (hero.y + HERO_SIZE >= GROUND_Y) { die("ground"); }
+      if (game.invuln > 0) game.invuln = Math.max(0, game.invuln - dt);
+      const hit = game.invuln > 0 ? null : heroHits();
+      if (hit) {
+        if (game.lives > 1) survivedHit(hit);
+        else die(hit.kind);
+      } else if (hero.y + HERO_SIZE >= GROUND_Y) {
+        die("ground");
+      }
     } else if (game.state === STATE.DYING) {
       hero.vy = Math.min(MAX_FALL, hero.vy + GRAVITY);
       hero.y += hero.vy;
@@ -455,6 +765,8 @@
     } else if (game.state === STATE.OVER) {
       game.overTimer += dt;
     }
+
+    if (hero.squash > 0) hero.squash = Math.max(0, hero.squash - dt * 4.5);
 
     for (const p of particles) {
       p.x += p.vx;
@@ -482,13 +794,15 @@
 
     // chunky pixel sun
     ctx.fillStyle = COLORS.sun;
-    ctx.fillRect(246, 32, 24, 32);
-    ctx.fillRect(242, 36, 32, 24);
-    ctx.fillRect(238, 42, 40, 12);
+    ctx.fillRect(246, 24, 24, 32);
+    ctx.fillRect(242, 28, 32, 24);
+    ctx.fillRect(238, 34, 40, 12);
+    const pulse = Math.sin(game.time * 1.6) > 0 ? 1 : 0;
     ctx.fillStyle = COLORS.sunCore;
-    ctx.fillRect(250, 38, 12, 12);
+    ctx.fillRect(250 - pulse, 30 - pulse, 12 + pulse * 2, 12 + pulse * 2);
 
-    drawTiled(cloudLayer, game.scroll * 0.18, 26);
+    for (const c of clouds) drawCloud(c);
+    for (const b of birds) drawBird(b);
     drawTiled(mountainLayer, game.scroll * 0.3, GROUND_Y - 190);
     drawTiled(cityLayer, game.scroll * 0.46, GROUND_Y - 96);
 
@@ -499,7 +813,9 @@
     const wobble = Math.floor(game.scroll * 0.6);
     for (let x = 0; x < W; x += 16) {
       const px = (x - wobble % 16 + W) % W;
-      ctx.fillRect(px, GROUND_Y - 20 + ((x / 16) % 2) * 8, 7, 2);
+      const lane = (x / 16) % 2;
+      const dy = Math.round(Math.sin(game.time * 2.2 + x * 0.35) * 1.5);
+      ctx.fillRect(px, GROUND_Y - 20 + lane * 8 + dy, 7, 2);
     }
   }
 
@@ -515,41 +831,72 @@
       ctx.drawImage(colaCapFlip, x, upperCapY);
     }
 
-    // lower bottle stands up
+    // lower bottle stands up, with the label facing the player
     ctx.drawImage(colaCap, x, bottomStart);
+    drawText(ctx, "cola", x + COLA_W / 2, bottomStart + 62, {
+      scale: 1, color: "#ffffff", align: "center",
+    });
     const bodyTop = bottomStart + CAP_H;
     if (bodyTop < GROUND_Y) ctx.drawImage(colaBody, x, bodyTop, COLA_W, GROUND_Y - bodyTop);
   }
 
-  function drawHero() {
+  function drawHero(atX) {
     if (!heroReady) return;
-    const cx = HERO_X + HERO_SIZE / 2;
+    // blink while the extra-life shield is still up
+    if (game.invuln > 0 && Math.floor(game.time * 14) % 2 === 0) return;
+    const cx = (atX === undefined ? HERO_X : atX) + HERO_SIZE / 2;
     const cy = hero.y + HERO_SIZE / 2;
     // quantise the rotation so the sprite keeps its pixel grid
     const step = Math.PI / 12;
     const angle = Math.round(hero.angle / step) * step;
+    // stretch upwards right after a flap, then settle back
+    const squash = Math.sin(hero.squash * Math.PI) * 0.16;
+    const w = Math.round(HERO_SIZE * (1 - squash));
+    const h = Math.round(HERO_SIZE * (1 + squash));
     ctx.save();
     ctx.translate(Math.round(cx), Math.round(cy));
     ctx.rotate(angle);
-    ctx.drawImage(heroImg, -HERO_SIZE / 2, -HERO_SIZE / 2, HERO_SIZE, HERO_SIZE);
+    ctx.drawImage(heroImg, -Math.round(w / 2), -Math.round(h / 2), w, h);
     ctx.restore();
   }
 
-  function drawKaty(k) {
-    const x = Math.round(k.x);
-    const y = Math.round(k.y);
-    const bob = Math.sin(k.t * 2) > 0 ? 0 : 1;
-    ctx.drawImage(katySpriteFlip, x, y + bob);
-    // musical notes trailing behind her
-    ctx.fillStyle = "#ffffff";
-    const n = Math.floor(k.t * 2) % 3;
-    for (let i = 0; i < 3; i++) {
-      const nx = x + KATY_W + 6 + i * 9;
-      const ny = y + 12 + Math.sin(k.t * 3 + i) * 6;
-      if (i === n) continue;
-      ctx.fillRect(Math.round(nx), Math.round(ny), 3, 3);
-      ctx.fillRect(Math.round(nx) + 2, Math.round(ny) - 5, 2, 6);
+  function drawEnemy(e) {
+    const x = Math.round(e.x);
+    const y = Math.round(e.y);
+    if (e.kind === "gull") {
+      const frame = Math.floor(e.t * 7) % 2;
+      ctx.drawImage(gullFrames[frame], x, y);
+    } else if (e.kind === "can") {
+      // a wobble instead of a real rotation keeps the pixels crisp
+      const wobble = Math.sin(e.spin) > 0 ? 1 : -1;
+      ctx.drawImage(canSprite, x, y + wobble);
+    } else {
+      const frame = Math.floor(e.t * 16) % 2;
+      ctx.drawImage(droneFrames[frame], x, y);
+      if (e.flash > 0) {
+        // camera flash
+        ctx.fillStyle = "rgba(255,255,255," + Math.min(0.85, e.flash * 5) + ")";
+        ctx.fillRect(x - 6, y + 6, e.def.w + 12, 12);
+      }
     }
+  }
+
+  function drawBonus(b) {
+    const x = Math.round(b.x);
+    const y = Math.round(b.y);
+    const bob = Math.sin(b.t * 3) > 0 ? 0 : 1;
+
+    // sparkles so she reads as a pickup, not as another enemy
+    ctx.fillStyle = "rgba(255,212,71,0.9)";
+    for (let i = 0; i < 3; i++) {
+      const a = b.t * 2 + i * 2.1;
+      const sx = Math.round(x + KATY_W / 2 + Math.cos(a) * (KATY_W / 2 + 6));
+      const sy = Math.round(y + KATY_H / 2 + Math.sin(a) * (KATY_H / 2 + 2));
+      ctx.fillRect(sx, sy, 2, 2);
+    }
+    ctx.drawImage(katySprite, x, y + bob);
+    const hy = Math.round(y - 14 + Math.sin(b.t * 4) * 2);
+    ctx.drawImage(heartSprite, Math.round(x + KATY_W / 2 - heartSprite.width / 2), hy);
   }
 
   function drawParticles() {
@@ -567,6 +914,88 @@
       drawText(ctx, t.text, t.x, t.y, { scale: 1, color: t.color, align: "center", outline: COLORS.ink });
     }
     ctx.globalAlpha = 1;
+  }
+
+  // ------------------------------------------------------------------ buttons
+  // Rebuilt from the current state, so the same list drives drawing and taps.
+  function uiButtons() {
+    if (game.dialogOpen) return [];
+    if (game.paused) {
+      return [{ id: "resume", x: 60, y: 268, w: 200, h: 32, label: "продолжить", primary: true }];
+    }
+    if (game.state === STATE.TITLE) {
+      return [
+        { id: "play", x: 60, y: 300, w: 200, h: 32, label: "играть", primary: true, scale: 2 },
+        { id: "board", x: 60, y: 340, w: 96, h: 26, label: "рейтинг" },
+        { id: "name", x: 164, y: 340, w: 96, h: 26, label: "имя" },
+      ];
+    }
+    if (game.state === STATE.OVER) {
+      return [
+        { id: "again", x: 60, y: 300, w: 200, h: 32, label: "ещё раз", primary: true, scale: 2 },
+        { id: "board", x: 60, y: 340, w: 200, h: 26, label: "рейтинг" },
+      ];
+    }
+    if (game.state === STATE.BOARD) {
+      return [
+        { id: "back", x: 44, y: 404, w: 130, h: 28, label: "назад", primary: true },
+        { id: "refresh", x: 182, y: 404, w: 94, h: 28, label: "обновить" },
+      ];
+    }
+    // during play only the two small corner toggles are tappable
+    return [
+      { id: "pause", x: W - 58, y: 8, w: 22, h: 22, icon: "pause" },
+      { id: "sound", x: W - 30, y: 8, w: 22, h: 22, icon: "sound" },
+    ];
+  }
+
+  function onButton(id) {
+    Sfx.unlock();
+    if (id !== "sound") Sfx.swoosh();
+    if (id === "play" || id === "again") { game.paused = false; press(); }
+    else if (id === "board") openBoard();
+    else if (id === "back") closeBoard();
+    else if (id === "refresh") loadBoard(true);
+    else if (id === "name") askName(false);
+    else if (id === "pause") game.paused = true;
+    else if (id === "resume") game.paused = false;
+    else if (id === "sound") Sfx.toggleMute();
+  }
+
+  function drawButton(b) {
+    if (b.icon) {
+      ctx.fillStyle = "rgba(26,16,36,0.45)";
+      ctx.fillRect(b.x, b.y, b.w, b.h);
+      ctx.fillStyle = COLORS.paper;
+      if (b.icon === "pause") {
+        ctx.fillRect(b.x + 6, b.y + 5, 4, 12);
+        ctx.fillRect(b.x + 12, b.y + 5, 4, 12);
+      } else {
+        ctx.fillRect(b.x + 5, b.y + 8, 4, 6);
+        ctx.fillRect(b.x + 9, b.y + 5, 3, 12);
+        if (Sfx.isMuted()) {
+          ctx.fillStyle = "#ff5a5a";
+          ctx.fillRect(b.x + 4, b.y + 4, 14, 2);
+        } else {
+          ctx.fillRect(b.x + 14, b.y + 7, 2, 8);
+        }
+      }
+      return;
+    }
+    ctx.fillStyle = COLORS.ink;
+    ctx.fillRect(b.x - 2, b.y - 2, b.w + 4, b.h + 4);
+    ctx.fillStyle = b.primary ? "#ff3ea5" : COLORS.paper;
+    ctx.fillRect(b.x, b.y, b.w, b.h);
+    ctx.fillStyle = b.primary ? "#c41f77" : "#e4d5b4";
+    ctx.fillRect(b.x, b.y + b.h - 3, b.w, 3);
+    const scale = b.scale || 1;
+    drawText(ctx, b.label, b.x + b.w / 2, b.y + Math.round((b.h - 7 * scale) / 2) - 1, {
+      scale: scale, color: b.primary ? "#ffffff" : COLORS.ink, align: "center",
+    });
+  }
+
+  function drawButtons() {
+    for (const b of uiButtons()) drawButton(b);
   }
 
   function panel(x, y, w, h) {
@@ -587,6 +1016,9 @@
 
   function drawHud() {
     if (game.state === STATE.PLAY || game.state === STATE.DYING) {
+      for (let i = 0; i < game.lives; i++) {
+        ctx.drawImage(heartSprite, 8 + i * 18, 10);
+      }
       const label = String(game.score);
       const tw = textWidth(label, 4);
       ctx.fillStyle = "rgba(26,16,36,0.32)";
@@ -595,59 +1027,146 @@
         scale: 4, color: COLORS.paper, align: "center", outline: COLORS.ink,
       });
     }
-    drawText(ctx, Sfx.isMuted() ? "snd off" : "snd on", W - 6, H - 14, {
-      scale: 1, color: "#ffffff", align: "right", shadow: COLORS.ink,
-    });
   }
 
   function drawTitle() {
-    drawText(ctx, "flappy", W / 2, 84, { scale: 4, color: "#ffd447", align: "center", outline: COLORS.ink });
-    drawText(ctx, "lesha", W / 2, 122, { scale: 4, color: "#ff3ea5", align: "center", outline: COLORS.ink });
+    drawText(ctx, "flappy", W / 2, 62, { scale: 4, color: "#ffd447", align: "center", outline: COLORS.ink });
+    drawText(ctx, "lesha", W / 2, 96, { scale: 4, color: "#ff3ea5", align: "center", outline: COLORS.ink });
 
-    panel(38, 228, W - 76, 116);
-    drawText(ctx, "watch out for", W / 2, 236, { scale: 1, color: COLORS.ink, align: "center" });
-    ctx.drawImage(katySprite, 72, 254);
-    ctx.drawImage(colaCap, 192, 258);
-    drawText(ctx, "katy", 88, 326, { scale: 1, color: COLORS.ink, align: "center" });
-    drawText(ctx, "cola", 220, 326, { scale: 1, color: COLORS.ink, align: "center" });
-
-    const blink = Math.floor(game.time * 2) % 2 === 0;
-    if (blink) {
-      drawText(ctx, "press space or tap", W / 2, 360, {
-        scale: 1, color: COLORS.paper, align: "center", outline: COLORS.ink,
-      });
-    }
-    drawText(ctx, "best: " + game.best, W / 2, 380, {
+    drawHero(W / 2 - HERO_SIZE / 2);
+    drawText(ctx, "игрок: " + (game.player || "..."), W / 2, 176, {
       scale: 1, color: COLORS.paper, align: "center", outline: COLORS.ink,
+    });
+
+    panel(38, 186, W - 76, 110);
+    drawText(ctx, "враги", W / 2, 192, { scale: 1, color: COLORS.ink, align: "center" });
+    const icons = [
+      [colaTiny, "кола", 54],
+      [gullTiny, "чайка", 108],
+      [canTiny, "банка", 158],
+      [droneTiny, "дрон", 202],
+    ];
+    for (const [img, label, ix] of icons) {
+      ctx.drawImage(img, ix, 204 + (16 - img.height / 2));
+      drawText(ctx, label, ix + img.width / 2, 238, { scale: 1, color: COLORS.ink, align: "center" });
+    }
+    ctx.fillStyle = "#e4d5b4";
+    ctx.fillRect(48, 246, W - 96, 2);
+    ctx.drawImage(katyTiny, 58, 254);
+    ctx.drawImage(heartTiny, 82, 262);
+    drawText(ctx, "кэти даёт", 104, 256, { scale: 1, color: COLORS.ink });
+    drawText(ctx, "лишнюю жизнь", 104, 268, { scale: 1, color: "#c41f77" });
+
+    drawText(ctx, "пробел / тап - взмах", W / 2, 374, {
+      scale: 1, color: COLORS.paper, align: "center", outline: COLORS.ink,
+    });
+    drawText(ctx, "твой рекорд: " + game.best, W / 2, 388, {
+      scale: 1, color: "#ffd447", align: "center", outline: COLORS.ink,
     });
   }
 
-  function drawGameOver() {
-    drawText(ctx, "game over", W / 2, 104, { scale: 3, color: "#ff5a5a", align: "center", outline: COLORS.ink });
+  // ------------------------------------------------------------ leaderboard
+  function boardRow(place, name, score, y, mine) {
+    if (mine) {
+      ctx.fillStyle = "rgba(255,62,165,0.25)";
+      ctx.fillRect(26, y - 5, W - 52, 23);
+    }
+    const color = mine ? "#c41f77" : COLORS.ink;
+    drawText(ctx, place, 34, y, { scale: 2, color: color });
+    drawText(ctx, String(name).slice(0, Scores.MAX_NAME), 86, y, { scale: 2, color: color });
+    drawText(ctx, String(score), W - 34, y, { scale: 2, color: color, align: "right" });
+  }
 
-    panel(60, 150, W - 120, 108);
-    drawText(ctx, "score", 78, 162, { scale: 1, color: COLORS.ink });
-    drawText(ctx, String(game.score), W - 78, 158, { scale: 2, color: COLORS.ink, align: "right" });
-    drawText(ctx, "best", 78, 196, { scale: 1, color: COLORS.ink });
-    drawText(ctx, String(game.best), W - 78, 192, { scale: 2, color: COLORS.ink, align: "right" });
+  function drawBoard() {
+    ctx.fillStyle = "rgba(26,16,36,0.55)";
+    ctx.fillRect(0, 0, W, H);
+
+    drawText(ctx, "рейтинг", W / 2, 18, { scale: 3, color: "#ffd447", align: "center", outline: COLORS.ink });
+    const badge = game.board.source === "cloud"
+      ? "общий топ игроков"
+      : (Scores.online ? "нет связи - показан локальный топ" : "локальный топ");
+    drawText(ctx, badge, W / 2, 48, {
+      scale: 1, color: game.board.source === "cloud" ? "#9fe8a0" : "#ffb3b3",
+      align: "center", outline: COLORS.ink,
+    });
+
+    panel(20, 64, W - 40, 330);
+
+    const rows = game.board.rows || [];
+    const me = (game.player || "").toUpperCase();
+    if (game.board.loading && !rows.length) {
+      drawText(ctx, Math.floor(game.time * 2) % 2 ? "загрузка" : "загрузка.", W / 2, 210,
+        { scale: 2, color: COLORS.ink, align: "center" });
+    } else if (!rows.length) {
+      drawText(ctx, "пока пусто", W / 2, 196, { scale: 2, color: COLORS.ink, align: "center" });
+      drawText(ctx, "стань первым!", W / 2, 224, { scale: 1, color: COLORS.ink, align: "center" });
+    } else {
+      const shown = rows.slice(0, 11);
+      let myPlace = -1;
+      rows.forEach((r, i) => {
+        if (myPlace < 0 && String(r.player).toUpperCase() === me) myPlace = i;
+      });
+      shown.forEach((r, i) => {
+        boardRow("#" + (i + 1), r.player, r.score, 78 + i * 26,
+          String(r.player).toUpperCase() === me);
+      });
+      const footY = 78 + Math.max(shown.length, 4) * 26 + 8;
+      if (footY < 380) {
+        ctx.fillStyle = "#e4d5b4";
+        ctx.fillRect(30, footY - 6, W - 60, 2);
+        let mine;
+        if (myPlace >= 0 && myPlace < shown.length) {
+          mine = "ты на " + (myPlace + 1) + " месте";
+        } else if (game.rank) {
+          mine = "ты: #" + game.rank + "  -  " + game.best;
+        } else if (myPlace >= 0) {
+          mine = "ты: #" + (myPlace + 1) + "  -  " + rows[myPlace].score;
+        } else {
+          mine = "тебя тут ещё нет";
+        }
+        drawText(ctx, mine, W / 2, footY + 2, { scale: 1, color: COLORS.ink, align: "center" });
+      }
+    }
+  }
+
+  function drawGameOver() {
+    drawText(ctx, "игра окончена", W / 2, 96, {
+      scale: 3, color: "#ff5a5a", align: "center", outline: COLORS.ink,
+    });
+
+    panel(50, 132, W - 100, 152);
+    drawText(ctx, game.player || "игрок", W / 2, 142, { scale: 1, color: "#c41f77", align: "center" });
+
+    drawText(ctx, "счёт", 66, 162, { scale: 1, color: COLORS.ink });
+    drawText(ctx, String(game.score), W - 66, 158, { scale: 2, color: COLORS.ink, align: "right" });
+    drawText(ctx, "рекорд", 66, 190, { scale: 1, color: COLORS.ink });
+    drawText(ctx, String(game.best), W - 66, 186, { scale: 2, color: COLORS.ink, align: "right" });
+
+    let place = "...";
+    if (game.rank) place = "#" + game.rank;
+    else if (!Scores.online) place = "#" + "?";
+    drawText(ctx, "место", 66, 218, { scale: 1, color: COLORS.ink });
+    drawText(ctx, game.submitting ? "..." : place, W - 66, 214, {
+      scale: 2, color: "#c41f77", align: "right",
+    });
 
     const medal = medalFor(game.score);
     if (medal) {
       ctx.fillStyle = COLORS.ink;
-      ctx.fillRect(76, 224, 22, 22);
+      ctx.fillRect(64, 242, 22, 22);
       ctx.fillStyle = medal.dark;
-      ctx.fillRect(78, 226, 18, 18);
+      ctx.fillRect(66, 244, 18, 18);
       ctx.fillStyle = medal.color;
-      ctx.fillRect(80, 228, 14, 14);
+      ctx.fillRect(68, 246, 14, 14);
       ctx.fillStyle = medal.dark;
-      ctx.fillRect(84, 232, 6, 6);
-      drawText(ctx, medal.name, 108, 232, { scale: 1, color: COLORS.ink });
+      ctx.fillRect(72, 250, 6, 6);
+      drawText(ctx, medal.name, 96, 250, { scale: 1, color: COLORS.ink });
     } else {
-      drawText(ctx, "keep flapping!", 78, 232, { scale: 1, color: COLORS.ink });
+      drawText(ctx, "10 очков - бронза", 66, 250, { scale: 1, color: COLORS.ink });
     }
 
     if (game.overTimer > 0.6 && Math.floor(game.time * 2) % 2 === 0) {
-      drawText(ctx, "press space to retry", W / 2, 292, {
+      drawText(ctx, "пробел / тап - ещё раз", W / 2, 382, {
         scale: 1, color: COLORS.paper, align: "center", outline: COLORS.ink,
       });
     }
@@ -662,20 +1181,24 @@
 
     drawBackground();
     for (const o of obstacles) drawBottle(o);
-    for (const k of katies) drawKaty(k);
-    drawHero();
+    for (const e of enemies) drawEnemy(e);
+    for (const b of bonuses) drawBonus(b);
+    if (game.state !== STATE.TITLE && game.state !== STATE.BOARD) drawHero();
     drawParticles();
     drawTiled(groundTile, game.scroll, GROUND_Y);
     drawPopups();
 
     if (game.state === STATE.TITLE) drawTitle();
     if (game.state === STATE.OVER) drawGameOver();
+    if (game.state === STATE.BOARD) drawBoard();
     drawHud();
+    if (!game.paused) drawButtons();
 
     if (game.paused) {
       ctx.fillStyle = "rgba(26,16,36,0.6)";
       ctx.fillRect(0, 0, W, H);
-      drawText(ctx, "paused", W / 2, H / 2 - 10, { scale: 3, color: COLORS.paper, align: "center", outline: COLORS.ink });
+      drawText(ctx, "пауза", W / 2, 220, { scale: 3, color: COLORS.paper, align: "center", outline: COLORS.ink });
+      drawButtons();
     }
     ctx.restore();
 
@@ -688,7 +1211,10 @@
   // -------------------------------------------------------------------- input
   function press() {
     Sfx.unlock();
-    if (game.paused) return;
+    if (game.dialogOpen || game.paused) return;
+    if (game.state === STATE.BOARD) { closeBoard(); return; }
+    if (!game.player) { askName(true); return; }
+
     if (game.state === STATE.TITLE) {
       game.state = STATE.PLAY;
       hero.y = H * 0.42;
@@ -701,7 +1227,23 @@
     }
   }
 
+  function canvasPoint(e) {
+    const rect = canvas.getBoundingClientRect();
+    return {
+      x: (e.clientX - rect.left) * (W / rect.width),
+      y: (e.clientY - rect.top) * (H / rect.height),
+    };
+  }
+
+  function buttonAt(point) {
+    // generous hit area so small taps still land on phones
+    return uiButtons().find((b) =>
+      point.x >= b.x - 6 && point.x <= b.x + b.w + 6 &&
+      point.y >= b.y - 6 && point.y <= b.y + b.h + 6);
+  }
+
   window.addEventListener("keydown", (e) => {
+    if (game.dialogOpen) return;
     if (e.code === "Space" || e.code === "ArrowUp" || e.code === "KeyW" || e.code === "Enter") {
       e.preventDefault();
       press();
@@ -711,34 +1253,72 @@
     } else if (e.code === "KeyP") {
       game.paused = !game.paused;
     } else if (e.code === "KeyR") {
-      reset();
+      if (!game.dialogOpen) reset();
+    } else if (e.code === "KeyL") {
+      if (!game.dialogOpen) { if (game.state === STATE.BOARD) closeBoard(); else openBoard(); }
+    } else if (e.code === "KeyN") {
+      askName(false);
+    } else if (e.code === "Escape") {
+      if (game.state === STATE.BOARD) closeBoard();
+      else if (game.paused) game.paused = false;
     }
   });
-  canvas.addEventListener("pointerdown", (e) => { e.preventDefault(); press(); });
-  window.addEventListener("blur", () => { if (game.state === STATE.PLAY) game.paused = true; });
+  canvas.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    if (game.dialogOpen) return;
+    const hit = buttonAt(canvasPoint(e));
+    if (hit) { onButton(hit.id); return; }
+    press();
+  });
+  canvas.addEventListener("contextmenu", (e) => e.preventDefault());
+  window.addEventListener("blur", () => {
+    if (game.state === STATE.PLAY && !game.dialogOpen) game.paused = true;
+  });
 
   // ------------------------------------------------------------------ scaling
   function resize() {
-    const availW = window.innerWidth - 16;
-    const availH = window.innerHeight - 96;
+    // Phones get the full screen; desktops keep a whole-number zoom so every
+    // game pixel stays a perfect square.
+    const compact = window.matchMedia("(pointer: coarse), (max-height: 620px)").matches;
+    const viewportH = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+    const availW = Math.max(160, window.innerWidth - (compact ? 0 : 16));
+    const availH = Math.max(240, viewportH - (compact ? 0 : 96));
     let scale = Math.min(availW / W, availH / H);
-    if (scale >= 1) scale = Math.floor(scale);
-    scale = Math.max(scale, 0.3);
+    if (!compact && scale >= 1) scale = Math.floor(scale);
+    scale = Math.max(scale, 0.25);
     canvas.style.width = Math.round(W * scale) + "px";
     canvas.style.height = Math.round(H * scale) + "px";
   }
   window.addEventListener("resize", resize);
+  window.addEventListener("orientationchange", () => setTimeout(resize, 150));
+  if (window.visualViewport) window.visualViewport.addEventListener("resize", resize);
   resize();
 
-  // ---------------------------------------------------------------- main loop
+  // --------------------------------------------------------------------- boot
+  seedClouds();
+  game.player = Scores.getName();
+  game.best = Math.max(game.best, Scores.localBest(game.player));
+  loadBoard(false);
+  Scores.retryPending();
+  if (!game.player) askName(true);
+
   // Small hook so the game can be driven from a script (used by the smoke test).
   window.FlappyLesha = {
     STATE: STATE,
     game: game,
     hero: hero,
     obstacles: () => obstacles,
-    katies: () => katies,
+    enemies: () => enemies,
+    bonuses: () => bonuses,
+    katies: () => bonuses,
     press: press,
+    spawnEnemy: spawnEnemy,
+    spawnBonus: spawnBonus,
+    button: onButton,
+    buttons: uiButtons,
+    askName: askName,
+    openBoard: openBoard,
+    loadBoard: loadBoard,
     gapSize: gapSize,
     layout: { W: W, H: H, HERO_X: HERO_X, HERO_SIZE: HERO_SIZE, COLA_W: COLA_W, GROUND_Y: GROUND_Y },
   };
