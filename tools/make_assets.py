@@ -19,11 +19,12 @@ from PIL import Image, ImageDraw, ImageEnhance, ImageOps
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-# Head position inside the source photo (centre x, centre y, square crop size).
-# Measured off the photo: hair top y=470, chin y=1440, ears x=220 and x=895.
-HEAD = (557, 950, 1060)
+# Head position inside the source photo (centre x, centre y, square crop size),
+# read off the photo at pixel zoom: ears at x=255 and x=978, crown at y=555,
+# bottom of the beard at y=1480.
+HEAD = (616, 1017, 1000)
 # Half width / half height of the head inside that crop, in source pixels.
-HEAD_RX, HEAD_RY = 350, 495
+HEAD_RX, HEAD_RY = 362, 468
 SIZE = 36
 OUTLINE = (26, 20, 34, 255)
 
@@ -83,7 +84,7 @@ def build_hero(photo_path):
             edge = math.hypot((x + 0.5 - SIZE / 2) / rx, (y + 0.5 - SIZE / 2) / ry)
             if b > r + 22 and b > 130:
                 mp[x, y] = 0
-            elif edge > 0.6 and max(r, g, b) > 110 and b >= r - 10:
+            elif edge > 0.74 and max(r, g, b) > 110 and b >= r:
                 mp[x, y] = 0
 
     # Pale, cool pixels left hanging on the silhouette are background fringe.
@@ -94,7 +95,7 @@ def build_hero(photo_path):
                 if not mp[x, y]:
                     continue
                 r, g, b = fp[x, y]
-                if max(r, g, b) <= 110 or b < r - 10:
+                if max(r, g, b) <= 110 or b < r:
                     continue
                 open_sides = sum(
                     1 for nx, ny in ((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1))
