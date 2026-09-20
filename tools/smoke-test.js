@@ -44,9 +44,10 @@ const INSECURE = !!process.env.SMOKE_INSECURE;
     const L = F.layout;
     window.__stats = {
       maxScore: 0, katySpawned: 0, livesTaken: 0, maxLives: 1,
-      enemyKinds: {}, deaths: 0, overSeen: 0,
+      enemyKinds: {}, deaths: 0, overSeen: 0, checkpoints: 0,
     };
     let wasOver = false;
+    let wasCheckpoint = false;
     let bonusCount = 0;
     let lives = 1;
 
@@ -65,10 +66,15 @@ const INSECURE = !!process.env.SMOKE_INSECURE;
       lives = g.lives;
       for (const e of F.enemies()) st.enemyKinds[e.kind] = (st.enemyKinds[e.kind] || 0) + 1;
 
-      if (g.state === F.STATE.OVER) {
+      if (g.state === F.STATE.CHECKPOINT) {
+        if (!wasCheckpoint) { st.checkpoints++; wasCheckpoint = true; }
+        F.press();                                  // ignored until it is dismissable
+      } else if (g.state === F.STATE.OVER) {
+        wasCheckpoint = false;
         if (!wasOver) { st.deaths++; st.overSeen++; wasOver = true; }
         F.press();
       } else {
+        wasCheckpoint = false;
         wasOver = false;
         if (g.state === F.STATE.TITLE) F.press();
         else if (g.state === F.STATE.PLAY) {
@@ -105,7 +111,8 @@ const INSECURE = !!process.env.SMOKE_INSECURE;
     rows: window.FlappyLesha.game.board.rows.length,
     source: window.FlappyLesha.game.board.source,
     player: window.FlappyLesha.game.player,
-  })).catch(() => ({ rows: 0, source: "?", player: "" }));
+    photos: Object.keys(CHECKPOINT_IMAGES).length,
+  })).catch(() => ({ rows: 0, source: "?", player: "", photos: 0 }));
 
   const checks = [
     ["no runtime errors", errors.length === 0, errors.join(" | ")],
@@ -118,6 +125,9 @@ const INSECURE = !!process.env.SMOKE_INSECURE;
     ["flying enemies appear", Object.keys(stats.enemyKinds).length >= 1,
       Object.keys(stats.enemyKinds).join(",") || "none"],
     ["game over works", stats.overSeen >= 1, "deaths " + stats.deaths],
+    ["checkpoint photos bundled", board.photos >= 1, board.photos + " photo(s)"],
+    ["checkpoint screen shows up", stats.maxScore < 10 || stats.checkpoints >= 1,
+      "seen " + stats.checkpoints + " at best score " + stats.maxScore],
   ];
   let failed = 0;
   for (const [name, ok, info] of checks) {

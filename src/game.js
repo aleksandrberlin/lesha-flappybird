@@ -139,6 +139,26 @@
   const KATY_H = katySprite.height;
   const CAP_H = colaCap.height;
 
+  // Checkpoint photos stay photos - they are the joke, so no pixelation.
+  const checkpointPhotos = {};
+  for (const slot in CHECKPOINT_IMAGES) {
+    const img = new Image();
+    img.src = CHECKPOINT_IMAGES[slot];
+    checkpointPhotos[slot] = img;
+  }
+
+  function currentCheckpoint() {
+    const order = CHECKPOINTS.order.filter((slot) => checkpointPhotos[slot]);
+    if (!order.length) return null;
+    const slot = order[game.checkpointIndex % order.length];
+    return {
+      slot: slot,
+      photo: checkpointPhotos[slot],
+      caption: CHECKPOINTS.captions[slot] || "",
+      cheer: CHECKPOINTS.cheers[game.checkpointIndex % CHECKPOINTS.cheers.length] || "",
+    };
+  }
+
   const heroImg = new Image();
   let heroReady = false;
   heroImg.onload = () => { heroReady = true; };
@@ -311,7 +331,7 @@
   }
 
   // --------------------------------------------------------------- game state
-  const STATE = { TITLE: 0, PLAY: 1, DYING: 2, OVER: 3, BOARD: 4 };
+  const STATE = { TITLE: 0, PLAY: 1, DYING: 2, OVER: 3, BOARD: 4, CHECKPOINT: 5 };
 
   const game = {
     state: STATE.TITLE,
@@ -329,6 +349,9 @@
     invuln: 0,
     level: 1,
     lastGapTop: null,
+    nextCheckpoint: CHECKPOINTS.every,
+    checkpointIndex: 0,
+    checkpointTimer: 0,
     player: "",
     rank: null,
     submitting: false,
@@ -407,6 +430,9 @@
     game.invuln = 0;
     game.level = 1;
     game.lastGapTop = null;
+    game.nextCheckpoint = CHECKPOINTS.every;
+    game.checkpointIndex = 0;
+    game.checkpointTimer = 0;
     hero.y = H * 0.42;
     hero.vy = 0;
     hero.angle = 0;
@@ -445,8 +471,28 @@
     });
   }
 
+  function enterCheckpoint() {
+    game.nextCheckpoint += CHECKPOINTS.every;
+    if (!currentCheckpoint()) return;       // no photos bundled - just play on
+    game.state = STATE.CHECKPOINT;
+    game.checkpointTimer = 0;
+    game.flash = Math.max(game.flash, 0.3);
+    Sfx.levelUp();
+  }
+
+  function leaveCheckpoint() {
+    game.checkpointIndex++;
+    game.state = STATE.PLAY;
+    game.invuln = Math.max(game.invuln, 1.2);   // a moment to get your bearings
+    Sfx.swoosh();
+  }
+
   // A level every few points: the world gets faster and the player is told so.
   function checkLevel() {
+    if (game.score >= game.nextCheckpoint) {
+      enterCheckpoint();
+      return;                              // the checkpoint screen announces it
+    }
     const level = Math.floor(game.score / LEVEL_EVERY) + 1;
     if (level <= game.level) return;
     game.level = level;
@@ -806,6 +852,8 @@
       }
     } else if (game.state === STATE.OVER) {
       game.overTimer += dt;
+    } else if (game.state === STATE.CHECKPOINT) {
+      game.checkpointTimer += dt;
     }
 
     if (hero.squash > 0) hero.squash = Math.max(0, hero.squash - dt * 4.5);
@@ -975,6 +1023,11 @@
         { id: "board", x: 60, y: 340, w: 200, h: 26, label: "рейтинг" },
       ];
     }
+    if (game.state === STATE.CHECKPOINT) {
+      return game.checkpointTimer > 0.5
+        ? [{ id: "continue", x: 60, y: 432, w: 200, h: 30, label: "дальше", primary: true }]
+        : [];
+    }
     if (game.state === STATE.BOARD) {
       return [
         { id: "back", x: 44, y: 404, w: 130, h: 28, label: "назад", primary: true },
@@ -994,6 +1047,7 @@
     if (id === "play" || id === "again") { game.paused = false; press(); }
     else if (id === "board") openBoard();
     else if (id === "back") closeBoard();
+    else if (id === "continue") leaveCheckpoint();
     else if (id === "refresh") loadBoard(true);
     else if (id === "name") askName(false);
     else if (id === "pause") game.paused = true;
@@ -1168,6 +1222,54 @@
     }
   }
 
+  // A polaroid on top of the frozen game: the photo is drawn smoothly, the
+  // frame around it stays pixel art like everything else.
+  function drawCheckpoint() {
+    const cp = currentCheckpoint();
+    if (!cp) return;
+
+    ctx.fillStyle = "rgba(20,12,30,0.72)";
+    ctx.fillRect(0, 0, W, H);
+
+    drawText(ctx, "чекпоинт", W / 2, 44, {
+      scale: 3, color: "#ffd447", align: "center", outline: COLORS.ink,
+    });
+    drawText(ctx, game.score + " очков", W / 2, 80, {
+      scale: 2, color: COLORS.paper, align: "center", outline: COLORS.ink,
+    });
+
+    const fx = 32;
+    const fy = 104;
+    const fw = W - 64;
+    const px = fx + 10;
+    const py = fy + 10;
+    const pw = fw - 20;
+
+    ctx.fillStyle = COLORS.ink;
+    ctx.fillRect(fx - 3, fy - 3, fw + 6, pw + 62 + 6);
+    ctx.fillStyle = "#fffdf6";
+    ctx.fillRect(fx, fy, fw, pw + 62);
+
+    if (cp.photo.complete && cp.photo.naturalWidth) {
+      ctx.imageSmoothingEnabled = true;
+      ctx.drawImage(cp.photo, px, py, pw, pw);
+      ctx.imageSmoothingEnabled = false;
+    } else {
+      ctx.fillStyle = "#e4d5b4";
+      ctx.fillRect(px, py, pw, pw);
+    }
+    ctx.strokeStyle = "rgba(26,16,36,0.35)";
+    ctx.strokeRect(px + 0.5, py + 0.5, pw - 1, pw - 1);
+
+    drawText(ctx, cp.caption, W / 2, py + pw + 14, {
+      scale: 1, color: COLORS.ink, align: "center",
+    });
+    drawText(ctx, cp.cheer, W / 2, py + pw + 30, {
+      scale: 1, color: "#c41f77", align: "center",
+    });
+
+  }
+
   function drawGameOver() {
     drawText(ctx, "игра окончена", W / 2, 96, {
       scale: 3, color: "#ff5a5a", align: "center", outline: COLORS.ink,
@@ -1230,6 +1332,7 @@
     if (game.state === STATE.TITLE) drawTitle();
     if (game.state === STATE.OVER) drawGameOver();
     if (game.state === STATE.BOARD) drawBoard();
+    if (game.state === STATE.CHECKPOINT) drawCheckpoint();
     drawHud();
     if (!game.paused) drawButtons();
 
@@ -1252,6 +1355,10 @@
     Sfx.unlock();
     if (game.dialogOpen || game.paused) return;
     if (game.state === STATE.BOARD) { closeBoard(); return; }
+    if (game.state === STATE.CHECKPOINT) {
+      if (game.checkpointTimer > 0.5) leaveCheckpoint();
+      return;
+    }
     if (!game.player) { askName(true); return; }
 
     if (game.state === STATE.TITLE) {
@@ -1357,6 +1464,7 @@
     buttons: uiButtons,
     askName: askName,
     openBoard: openBoard,
+    checkpoint: currentCheckpoint,
     loadBoard: loadBoard,
     gapSize: gapSize,
     speed: speed,
