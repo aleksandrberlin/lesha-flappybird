@@ -10,7 +10,7 @@
   const GROUND_Y = H - GROUND_H;
 
   const HERO_X = 76;
-  const HERO_SIZE = 32;
+  const HERO_SIZE = 36;   // matches the generated sprite, so it draws 1:1
   const HERO_R = 12;
 
   const GRAVITY = 0.34;

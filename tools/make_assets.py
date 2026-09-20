@@ -20,11 +20,35 @@ from PIL import Image, ImageDraw, ImageEnhance, ImageOps
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 # Head position inside the source photo (centre x, centre y, square crop size).
-HEAD = (555, 885, 900)
+# Measured off the photo: hair top y=470, chin y=1440, ears x=220 and x=895.
+HEAD = (557, 950, 1060)
 # Half width / half height of the head inside that crop, in source pixels.
-HEAD_RX, HEAD_RY = 320, 425
-SIZE = 32
+HEAD_RX, HEAD_RY = 350, 495
+SIZE = 36
 OUTLINE = (26, 20, 34, 255)
+
+
+def largest_blob(mask_px):
+    """The biggest 4-connected run of opaque pixels in the mask."""
+    seen = set()
+    best = set()
+    for y in range(SIZE):
+        for x in range(SIZE):
+            if not mask_px[x, y] or (x, y) in seen:
+                continue
+            blob = set()
+            stack = [(x, y)]
+            seen.add((x, y))
+            while stack:
+                cx, cy = stack.pop()
+                blob.add((cx, cy))
+                for nx, ny in ((cx + 1, cy), (cx - 1, cy), (cx, cy + 1), (cx, cy - 1)):
+                    if 0 <= nx < SIZE and 0 <= ny < SIZE and mask_px[nx, ny] and (nx, ny) not in seen:
+                        seen.add((nx, ny))
+                        stack.append((nx, ny))
+            if len(blob) > len(best):
+                best = blob
+    return best
 
 
 def build_hero(photo_path):
@@ -33,9 +57,9 @@ def build_hero(photo_path):
     face = src.crop((cx - s // 2, cy - s // 2, cx + s // 2, cy + s // 2))
 
     small = face.resize((SIZE, SIZE), Image.BOX)
-    small = ImageEnhance.Color(small).enhance(1.55)
-    small = ImageEnhance.Contrast(small).enhance(1.18)
-    small = ImageEnhance.Brightness(small).enhance(1.05)
+    small = ImageEnhance.Color(small).enhance(1.6)
+    small = ImageEnhance.Contrast(small).enhance(1.24)
+    small = ImageEnhance.Brightness(small).enhance(1.08)
     flat = small.quantize(colors=16, method=Image.MEDIANCUT, dither=Image.NONE).convert("RGB")
 
     # Head-shaped cut-out, rasterised at 8x then thresholded for hard pixel edges.
@@ -47,12 +71,45 @@ def build_hero(photo_path):
          (SIZE / 2 + rx) * up - 1, (SIZE / 2 + ry) * up - 1), fill=255)
     mask = mask.resize((SIZE, SIZE), Image.BOX).point(lambda v: 255 if v >= 128 else 0)
 
-    # Drop the sky that survives inside the ellipse: skin and hair are never blue.
+    # Drop the background that survives inside the ellipse. Sky is plainly blue;
+    # the lake and the city behind the head are pale and never warm like skin,
+    # and they only ever show up close to the edge of the cut-out.
     mp, fp = mask.load(), flat.load()
     for y in range(SIZE):
         for x in range(SIZE):
+            if not mp[x, y]:
+                continue
             r, g, b = fp[x, y]
-            if mp[x, y] and b > r + 22 and b > 130:
+            edge = math.hypot((x + 0.5 - SIZE / 2) / rx, (y + 0.5 - SIZE / 2) / ry)
+            if b > r + 22 and b > 130:
+                mp[x, y] = 0
+            elif edge > 0.6 and max(r, g, b) > 110 and b >= r - 10:
+                mp[x, y] = 0
+
+    # Pale, cool pixels left hanging on the silhouette are background fringe.
+    for _ in range(2):
+        doomed = []
+        for y in range(SIZE):
+            for x in range(SIZE):
+                if not mp[x, y]:
+                    continue
+                r, g, b = fp[x, y]
+                if max(r, g, b) <= 110 or b < r - 10:
+                    continue
+                open_sides = sum(
+                    1 for nx, ny in ((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1))
+                    if not (0 <= nx < SIZE and 0 <= ny < SIZE) or not mp[nx, ny]
+                )
+                if open_sides:
+                    doomed.append((x, y))
+        for x, y in doomed:
+            mp[x, y] = 0
+
+    # Keep only the head itself - sky removal can leave loose specks behind.
+    keep = largest_blob(mp)
+    for y in range(SIZE):
+        for x in range(SIZE):
+            if mp[x, y] and (x, y) not in keep:
                 mp[x, y] = 0
 
     head = flat.convert("RGBA")
