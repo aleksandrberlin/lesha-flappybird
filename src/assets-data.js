@@ -212,32 +212,6 @@ const SPRITE_DATA = {
       ".....kkkkkk....."
     ]
   },
-  "can": {
-    "w": 11,
-    "pal": {
-      "M": "#d8dce8",
-      "m": "#9aa2b4",
-      "R": "#e2243a",
-      "r": "#a8122a",
-      "W": "#ffffff",
-      "D": "#4a0d1b"
-    },
-    "rows": [
-      "..DMMMMMD..",
-      ".DMmMMMmMD.",
-      ".DMMMMMMMD.",
-      ".DrRRRRRrD.",
-      ".DrRRRRRrD.",
-      ".DrWWWWWrD.",
-      ".DrWWWWWrD.",
-      ".DrWWWWWrD.",
-      ".DrRRRRRrD.",
-      ".DrRRRRRrD.",
-      ".DrRRRRRrD.",
-      ".DmMMMMMmD.",
-      "..DMMMMMD.."
-    ]
-  },
   "heart": {
     "w": 7,
     "pal": {

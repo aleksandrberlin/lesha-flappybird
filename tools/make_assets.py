@@ -252,30 +252,6 @@ DRONE_B = {
     ],
 }
 
-# A shaken cola can that comes in like a rocket.
-CAN = {
-    "w": 11,
-    "pal": {
-        "M": "#d8dce8", "m": "#9aa2b4", "R": "#e2243a", "r": "#a8122a",
-        "W": "#ffffff", "D": "#4a0d1b",
-    },
-    "rows": [
-        "..DMMMMMD..",
-        ".DMmMMMmMD.",
-        ".DMMMMMMMD.",
-        ".DrRRRRRrD.",
-        ".DrRRRRRrD.",
-        ".DrWWWWWrD.",
-        ".DrWWWWWrD.",
-        ".DrWWWWWrD.",
-        ".DrRRRRRrD.",
-        ".DrRRRRRrD.",
-        ".DrRRRRRrD.",
-        ".DmMMMMMmD.",
-        "..DMMMMMD..",
-    ],
-}
-
 # Spider-man hanging off his web: one arm up on the rope, legs tucked.
 SPIDER = {
     "w": 14,
@@ -406,7 +382,7 @@ def main():
         "katy": KATY, "colaCap": COLA_CAP, "colaBody": COLA_BODY,
         "gullUp": GULL_UP, "gullDown": GULL_DOWN,
         "droneA": DRONE_A, "droneB": DRONE_B,
-        "can": CAN, "heart": HEART, "spider": SPIDER,
+        "heart": HEART, "spider": SPIDER,
     }
     for name, sp in sprites.items():
         check(sp, name)

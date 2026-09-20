@@ -42,7 +42,6 @@
   // The flying enemies. Katy is not here any more - she hands out lives.
   const ENEMIES = {
     gull:  { w: 30, h: 22, inset: 5, unlock: 2,  weight: 3, label: "чайка" },
-    can:   { w: 22, h: 26, inset: 3, unlock: 7,  weight: 2, label: "банка" },
     drone: { w: 32, h: 22, inset: 5, unlock: 12, weight: 2, label: "дрон" },
     spider: { w: 28, h: 32, inset: 6, unlock: 5, weight: 2, label: "паук" },
   };
@@ -127,10 +126,8 @@
   const gullTiny = buildSprite(SP.gullUp, 1);
   const droneFrames = [buildSprite(SP.droneA, 2), buildSprite(SP.droneB, 2)];
   const droneTiny = buildSprite(SP.droneA, 1);
-  const canSprite = buildSprite(SP.can, 2);
   const spiderSprite = buildSprite(SP.spider, 2);
   const spiderTiny = buildSprite(SP.spider, 1);
-  const canTiny = buildSprite(SP.can, 1);
   const heartSprite = buildSprite(SP.heart, 2);
   const heartTiny = buildSprite(SP.heart, 1);
   const colaCap = buildSprite(SP.colaCap, COLA_SCALE);
@@ -655,12 +652,6 @@
       e.amp = 8 + Math.random() * 18;
       e.freq = 1.6 + Math.random() * 1.2;
       e.baseY = 50 + Math.random() * (GROUND_Y - 150 - e.amp * 2);
-    } else if (kind === "can") {
-      // a shaken can: slow at first, then it takes off
-      e.vx = base * 0.75;
-      e.accel = 0.05;
-      e.baseY = 60 + Math.random() * (GROUND_Y - 160);
-      e.spin = 0;
     } else if (kind === "spider") {
       // one swing across the screen on a web strung from the top edge
       e.vx = fairSpeed(spawnX, base * 0.9, base * 1.6);
@@ -748,12 +739,11 @@
     const debris = {
       cola: ["#e2243a", "#ff6070", "#ffffff"],
       gull: ["#ffffff", "#b9c4d4", "#8b97ab"],
-      can: ["#e2243a", "#d8dce8", "#ffffff"],
       drone: ["#2b2438", "#c8ccd8", "#ff4d4d"],
       spider: ["#d2222d", "#1d3fa8", "#ffffff"],
       ground: [COLORS.dirt, COLORS.dirtDark, "#ffffff"],
     }[cause] || ["#ffffff", "#ffd447"];
-    if (cause === "cola" || cause === "can") Sfx.cola();
+    if (cause === "cola") Sfx.cola();
     else Sfx.hit();
     burst(HERO_X, hero.y, 18, debris, cause === "ground" ? 2.6 : 3);
   }
@@ -869,18 +859,6 @@
         e.drawY = hy;
         e.hitX = e.drawX;
         e.hitY = hy + 6;
-      } else if (e.kind === "can") {
-        e.vx = Math.min(e.vx + e.accel, 7.5);
-        e.x -= e.vx;
-        e.spin += dt * 6;
-        if (Math.random() < 0.6) {
-          particles.push({
-            x: e.x + e.def.w, y: e.y + e.def.h / 2 + (Math.random() - 0.5) * 8,
-            vx: 0.6 + Math.random(), vy: (Math.random() - 0.5) * 0.6,
-            life: 0.3 + Math.random() * 0.3, size: 2, gravity: 0.01,
-            color: Math.random() < 0.5 ? "#ffffff" : "#ffb3bd",
-          });
-        }
       } else {
         e.x -= e.vx;
         const dy = cy - (e.y + e.def.h / 2);
@@ -1121,10 +1099,6 @@
       ctx.rotate(-angle);
       ctx.drawImage(spiderSprite, -spiderSprite.width / 2, 0);
       ctx.restore();
-    } else if (e.kind === "can") {
-      // a wobble instead of a real rotation keeps the pixels crisp
-      const wobble = Math.sin(e.spin) > 0 ? 1 : -1;
-      ctx.drawImage(canSprite, x, y + wobble);
     } else {
       const frame = Math.floor(e.t * 16) % 2;
       ctx.drawImage(droneFrames[frame], x, y);
@@ -1322,11 +1296,10 @@
       [colaTiny, "кола"],
       [gullTiny, "чайка"],
       [spiderTiny, "паук"],
-      [canTiny, "банка"],
       [droneTiny, "дрон"],
     ];
     icons.forEach(([img, label], i) => {
-      const cx = 56 + i * 52;
+      const cx = W / 2 + (i - (icons.length - 1) / 2) * 58;
       ctx.drawImage(img, Math.round(cx - img.width / 2), Math.round(220 - img.height / 2));
       drawText(ctx, label, cx, 238, { scale: 1, color: COLORS.ink, align: "center" });
     });
@@ -1335,7 +1308,7 @@
     ctx.drawImage(katyTiny, 58, 254);
     ctx.drawImage(heartTiny, 82, 262);
     drawText(ctx, "кэти даёт", 104, 256, { scale: 1, color: COLORS.ink });
-    drawText(ctx, "лишнюю жизнь", 104, 268, { scale: 1, color: "#c41f77" });
+    drawText(ctx, "дополнительную жизнь", 104, 268, { scale: 1, color: "#c41f77" });
 
     drawText(ctx, "пробел / тап - взмах", W / 2, 374, {
       scale: 1, color: COLORS.paper, align: "center", outline: COLORS.ink,
