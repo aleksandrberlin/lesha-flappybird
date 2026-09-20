@@ -1451,9 +1451,8 @@
     ctx.strokeStyle = "rgba(26,16,36,0.35)";
     ctx.strokeRect(px + 0.5, py + 0.5, pw - 1, pw - 1);
 
-    const label = "лёша " + cp.title;
-    drawText(ctx, label, W / 2, py + pw + 12, {
-      scale: label.length > 14 ? 1 : 2, color: COLORS.ink, align: "center",
+    drawText(ctx, cp.title, W / 2, py + pw + 12, {
+      scale: cp.title.length > 14 ? 1 : 2, color: COLORS.ink, align: "center",
     });
     if (!cp.isNew) {
       drawText(ctx, cp.cheer, W / 2, py + pw + 34, {
@@ -1518,7 +1517,7 @@
       ctx.fillStyle = "#fffdf6";
       ctx.fillRect(fx, fy, fw, pw + 62);
       drawPhoto(slot, fx + 10, fy + 10, pw);
-      const title = "лёша " + photoTitle(slot);
+      const title = photoTitle(slot);
       drawText(ctx, title, W / 2, fy + pw + 22, {
         scale: title.length > 14 ? 1 : 2, color: COLORS.ink, align: "center",
       });
