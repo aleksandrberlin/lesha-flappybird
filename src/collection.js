@@ -1,30 +1,20 @@
 // "Коллекция Лёш": which checkpoint photos this player has found.
-// Stored locally per player name and mirrored into Supabase, where finds are
-// append only - the same rules as the score board.
+// The server is the only place this is kept; the set below is just what the
+// current page knows, refilled from the server whenever the player changes.
 const Collection = (function () {
-  const KEY = "flappyLesha.finds.";
-
   let player = "";
   let owned = new Set();
+  let loaded = false;
+  const pending = [];          // finds the server has not accepted yet
 
-  function storageKey(name) {
-    return KEY + String(name || "").trim().toUpperCase();
-  }
-
-  function readLocal(name) {
-    try {
-      const raw = localStorage.getItem(storageKey(name));
-      const list = raw ? JSON.parse(raw) : [];
-      return new Set(Array.isArray(list) ? list : []);
-    } catch (e) {
-      return new Set();
+  function flush() {
+    if (!pending.length || !player) return;
+    const queue = pending.splice(0, pending.length);
+    for (const slot of queue) {
+      Scores.addFind(player, slot).then((ok) => {
+        if (!ok) pending.push(slot);
+      });
     }
-  }
-
-  function writeLocal(name, set) {
-    try {
-      localStorage.setItem(storageKey(name), JSON.stringify(Array.from(set)));
-    } catch (e) { /* private mode */ }
   }
 
   return {
@@ -35,6 +25,10 @@ const Collection = (function () {
 
     owned() {
       return owned;
+    },
+
+    loaded() {
+      return loaded;
     },
 
     has(slot) {
@@ -49,29 +43,32 @@ const Collection = (function () {
       return this.all().filter((slot) => !owned.has(slot));
     },
 
-    // Switch to a player: local finds first, then whatever the cloud knows.
+    // Switch to a player and pull their finds from the server.
     use(name) {
+      const changed = name !== player;
       player = name || "";
-      owned = readLocal(player);
+      if (changed) {
+        owned = new Set();
+        loaded = false;
+      }
       if (!player) return Promise.resolve(owned);
-      return Scores.finds(player)
-        .then((rows) => {
-          let changed = false;
-          for (const slot of rows) {
-            if (!owned.has(slot)) { owned.add(slot); changed = true; }
-          }
-          if (changed) writeLocal(player, owned);
-          return owned;
-        })
-        .catch(() => owned);
+      return Scores.finds(player).then((rows) => {
+        if (rows) {
+          owned = new Set(rows);
+          loaded = true;
+          flush();
+        }
+        return owned;
+      });
     },
 
     // Returns true when this photo had not been collected yet.
     add(slot) {
       if (!slot || owned.has(slot)) return false;
       owned.add(slot);
-      writeLocal(player, owned);
-      Scores.addFind(player, slot);
+      Scores.addFind(player, slot).then((ok) => {
+        if (!ok) pending.push(slot);      // retried the next time we sync
+      });
       return true;
     },
   };

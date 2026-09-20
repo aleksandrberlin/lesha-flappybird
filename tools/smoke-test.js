@@ -125,7 +125,7 @@ const INSECURE = !!process.env.SMOKE_INSECURE;
 
   const checks = [
     ["no runtime errors", errors.length === 0, errors.join(" | ")],
-    ["player name stored", !!board.player, "name " + board.player],
+    ["player name kept", !!board.player, "name " + board.player],
     ["leaderboard loads", board.rows > 0, board.source + ", rows " + board.rows],
     ["scored points", stats.maxScore >= 3, "max score " + stats.maxScore],
     ["katy shows up", stats.katySpawned >= 1, "spawned " + stats.katySpawned],
@@ -148,7 +148,7 @@ const INSECURE = !!process.env.SMOKE_INSECURE;
     if (!ok) failed++;
   }
   if (netIssues.length) {
-    console.log("note: " + netIssues.length + " request(s) failed, game fell back to the local board");
+    console.log("note: " + netIssues.length + " request(s) failed, game carried on without the server");
   }
   console.log(JSON.stringify(stats));
   await browser.close();

@@ -12,5 +12,5 @@ const LEADERBOARD_CONFIG = {
   table: "flappy_lesha_scores",
   view: "flappy_lesha_leaderboard",
   limit: 25,
-  timeout: 9000,
+  timeout: 6000,
 };

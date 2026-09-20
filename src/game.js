@@ -34,8 +34,6 @@
   const COLA_W = 28 * COLA_SCALE;
   const KATY_SCALE = 2;
 
-  const BEST_KEY = "flappyLesha.best";
-
   const MAX_LIVES = 3;
   const INVULN = 1.5;
 
@@ -444,7 +442,7 @@
   const game = {
     state: STATE.LOADING,
     score: 0,
-    best: Number(localStorage.getItem(BEST_KEY) || 0),
+    best: 0,
     scroll: 0,
     time: 0,
     shake: 0,
@@ -465,6 +463,7 @@
     collectionPick: null,
     player: "",
     rank: null,
+    sent: true,
     submitting: false,
     dialogOpen: false,
     boardFrom: STATE.TITLE,
@@ -478,15 +477,40 @@
   let particles = [];
   let popups = [];
 
-  function loadBoard(force) {
+  function loadBoard(force, attempt) {
     if (game.board.loading || (game.board.loaded && !force)) return;
     game.board.loading = true;
+    const tries = attempt || 1;
     Scores.top().then((res) => {
       game.board.rows = res.rows || [];
       game.board.source = res.source;
-      game.board.loaded = true;
+      game.board.loaded = res.source === "cloud";
       game.board.loading = false;
+      // nothing is mirrored locally any more, so a dropped request is worth
+      // another go rather than an empty board
+      if (res.source !== "cloud" && Scores.online && tries < 3) {
+        setTimeout(() => loadBoard(true, tries + 1), 1500 * tries);
+      }
     }).catch(() => { game.board.loading = false; });
+  }
+
+  // Pull this player's best and their finds from the server, retrying a few
+  // times: there is no local copy to fall back on.
+  function syncProfile(attempt) {
+    if (!game.player) return;
+    const tries = attempt || 1;
+    Promise.all([
+      Scores.best(game.player).then((best) => {
+        if (best === null) return false;
+        game.best = Math.max(game.best, best);
+        return true;
+      }),
+      Collection.use(game.player).then(() => Collection.loaded()),
+    ]).then(([gotBest, gotFinds]) => {
+      if ((!gotBest || !gotFinds) && Scores.online && tries < 4) {
+        setTimeout(() => syncProfile(tries + 1), 1500 * tries);
+      }
+    });
   }
 
   function askName(force) {
@@ -497,8 +521,8 @@
         game.dialogOpen = false;
         if (name) {
           game.player = Scores.setName(name);
-          game.best = Math.max(game.best, Scores.localBest(game.player));
-          Collection.use(game.player);
+          game.best = 0;
+          syncProfile();
           loadBoard(true);
           Sfx.unlock();
         }
@@ -785,17 +809,23 @@
     game.state = STATE.OVER;
     game.overTimer = 0;
     Sfx.die();
-    if (game.score > game.best) {
-      game.best = game.score;
-      try { localStorage.setItem(BEST_KEY, String(game.best)); } catch (e) { /* private mode */ }
-    }
+    if (game.score > game.best) game.best = game.score;
 
     game.rank = null;
+    game.sent = true;
     game.submitting = true;
     Scores.submit(game.player, game.score)
-      .then(() => Scores.rank(game.score))
-      .then((rank) => { game.rank = rank; game.submitting = false; loadBoard(true); })
-      .catch(() => { game.submitting = false; });
+      .then((ok) => {
+        game.sent = ok;
+        return ok ? Scores.rank(game.score) : null;
+      })
+      .then((rank) => {
+        game.rank = rank;
+        game.submitting = false;
+        loadBoard(true);
+        Collection.use(game.player);
+      })
+      .catch(() => { game.submitting = false; game.sent = false; });
   }
 
   // --------------------------------------------------------------- collisions
@@ -1370,7 +1400,7 @@
     drawText(ctx, "рейтинг", W / 2, 18, { scale: 3, color: "#ffd447", align: "center", outline: COLORS.ink });
     const badge = game.board.source === "cloud"
       ? "общий топ игроков"
-      : (Scores.online ? "нет связи - показан локальный топ" : "локальный топ");
+      : (Scores.online ? "нет связи с сервером" : "рейтинг выключен");
     drawText(ctx, badge, W / 2, 48, {
       scale: 1, color: game.board.source === "cloud" ? "#9fe8a0" : "#ffb3b3",
       align: "center", outline: COLORS.ink,
@@ -1384,8 +1414,11 @@
       drawText(ctx, Math.floor(game.time * 2) % 2 ? "загрузка" : "загрузка.", W / 2, 210,
         { scale: 2, color: COLORS.ink, align: "center" });
     } else if (!rows.length) {
-      drawText(ctx, "пока пусто", W / 2, 196, { scale: 2, color: COLORS.ink, align: "center" });
-      drawText(ctx, "стань первым!", W / 2, 224, { scale: 1, color: COLORS.ink, align: "center" });
+      const offline = game.board.source !== "cloud";
+      drawText(ctx, offline ? "нет связи" : "пока пусто", W / 2, 196,
+        { scale: 2, color: COLORS.ink, align: "center" });
+      drawText(ctx, offline ? "нажми обновить" : "стань первым!", W / 2, 224,
+        { scale: 1, color: COLORS.ink, align: "center" });
     } else {
       const shown = rows.slice(0, 11);
       let myPlace = -1;
@@ -1508,8 +1541,8 @@
     drawText(ctx, "найдено " + Collection.count() + " из " + all.length, W / 2, 48, {
       scale: 1, color: COLORS.paper, align: "center", outline: COLORS.ink,
     });
-    drawText(ctx, "новые попадаются на чекпоинтах", W / 2, 64, {
-      scale: 1, color: "#b9a9d6", align: "center", outline: COLORS.ink,
+    drawText(ctx, Collection.loaded() ? "новые попадаются на чекпоинтах" : "нет связи с сервером", W / 2, 64, {
+      scale: 1, color: Collection.loaded() ? "#b9a9d6" : "#ffb3b3", align: "center", outline: COLORS.ink,
     });
 
     if (game.collectionPick) {
@@ -1567,13 +1600,14 @@
     drawText(ctx, "рекорд", 66, 190, { scale: 1, color: COLORS.ink });
     drawText(ctx, String(game.best), W - 66, 186, { scale: 2, color: COLORS.ink, align: "right" });
 
-    let place = "...";
-    if (game.rank) place = "#" + game.rank;
-    else if (!Scores.online) place = "#" + "?";
     drawText(ctx, "место", 66, 218, { scale: 1, color: COLORS.ink });
-    drawText(ctx, game.submitting ? "..." : place, W - 66, 214, {
-      scale: 2, color: "#c41f77", align: "right",
-    });
+    if (game.submitting) {
+      drawText(ctx, "...", W - 66, 214, { scale: 2, color: "#c41f77", align: "right" });
+    } else if (game.rank) {
+      drawText(ctx, "#" + game.rank, W - 66, 214, { scale: 2, color: "#c41f77", align: "right" });
+    } else {
+      drawText(ctx, "нет связи", W - 66, 220, { scale: 1, color: "#c0182f", align: "right" });
+    }
 
     const medal = medalFor(game.score);
     if (medal) {
@@ -1762,10 +1796,8 @@
   // --------------------------------------------------------------------- boot
   seedClouds();
   game.player = Scores.getName();
-  game.best = Math.max(game.best, Scores.localBest(game.player));
-  Collection.use(game.player);
+  syncProfile();
   loadBoard(false);
-  Scores.retryPending();
   // the name dialog waits until the photos are in - see finishLoading()
 
   // Small hook so the game can be driven from a script (used by the smoke test).
@@ -1787,6 +1819,7 @@
     checkpoint: currentCheckpoint,
     pickPhoto: pickCheckpointPhoto,
     openCollection: openCollection,
+    sync: syncProfile,
     collection: () => Collection,
     loading: () => ({ total: loading.total, done: loading.done, progress: loadingProgress() }),
     loadBoard: loadBoard,
