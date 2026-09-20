@@ -18,6 +18,15 @@ create table if not exists public.flappy_lesha_scores (
 create index if not exists flappy_lesha_scores_score_idx
   on public.flappy_lesha_scores (score desc, created_at asc);
 
+-- A run carries an id made up by the browser, so retrying a request the server
+-- already accepted lands on the same row instead of adding a second.
+alter table public.flappy_lesha_scores
+  add column if not exists run_id uuid;
+
+create unique index if not exists flappy_lesha_scores_run_id_key
+  on public.flappy_lesha_scores (run_id)
+  where run_id is not null;
+
 alter table public.flappy_lesha_scores enable row level security;
 
 drop policy if exists flappy_lesha_scores_read on public.flappy_lesha_scores;

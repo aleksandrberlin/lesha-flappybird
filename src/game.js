@@ -468,6 +468,7 @@
     player: "",
     rank: null,
     sent: true,
+    runId: null,
     submitting: false,
     dialogOpen: false,
     boardFrom: STATE.TITLE,
@@ -807,29 +808,54 @@
     if (cause === "cola") Sfx.cola();
     else Sfx.hit();
     burst(HERO_X, hero.y, 18, debris, cause === "ground" ? 2.6 : 3);
+    sendRun();
+  }
+
+  // The run is over the moment the player is hit - the fall is only animation,
+  // and a player who closes the tab during it would otherwise never be counted.
+  // Nothing is stored locally, so a refused result is retried while the page
+  // is open rather than quietly dropped.
+  function sendRun(score, attempt) {
+    const value = score === undefined ? game.score : score;
+    const tries = attempt || 1;
+    if (tries === 1) {
+      game.runId = Scores.runId();
+      if (value > game.best) game.best = value;
+      game.rank = null;
+      game.sent = true;
+      game.submitting = true;
+    }
+    Scores.submit(game.player, value, game.runId)
+      .then((ok) => {
+        if (!ok) {
+          if (tries < 4) {
+            setTimeout(() => sendRun(value, tries + 1), 1500 * tries);
+          } else {
+            game.sent = false;
+            game.submitting = false;
+          }
+          return null;
+        }
+        game.sent = true;
+        return Scores.rank(value);
+      })
+      .then((rank) => {
+        if (rank === null) return;
+        game.rank = rank;
+        game.submitting = false;
+        loadBoard(true);
+        Collection.use(game.player);
+      })
+      .catch(() => {
+        if (tries < 4) setTimeout(() => sendRun(value, tries + 1), 1500 * tries);
+        else { game.submitting = false; game.sent = false; }
+      });
   }
 
   function gameOver() {
     game.state = STATE.OVER;
     game.overTimer = 0;
     Sfx.die();
-    if (game.score > game.best) game.best = game.score;
-
-    game.rank = null;
-    game.sent = true;
-    game.submitting = true;
-    Scores.submit(game.player, game.score)
-      .then((ok) => {
-        game.sent = ok;
-        return ok ? Scores.rank(game.score) : null;
-      })
-      .then((rank) => {
-        game.rank = rank;
-        game.submitting = false;
-        loadBoard(true);
-        Collection.use(game.player);
-      })
-      .catch(() => { game.submitting = false; game.sent = false; });
   }
 
   // --------------------------------------------------------------- collisions

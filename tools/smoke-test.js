@@ -36,7 +36,7 @@ const INSECURE = !!process.env.SMOKE_INSECURE;
   await page.waitForTimeout(300);
   const dialogVisible = await page.isVisible("#dialog:not(.hidden)");
   if (dialogVisible) {
-    await page.fill("#nameInput", "БОТ");
+    await page.fill("#nameInput", "SMOKEBOT");
     await page.click(".btn--go");
     await page.waitForTimeout(300);
   }
@@ -121,11 +121,15 @@ const INSECURE = !!process.env.SMOKE_INSECURE;
     frames: Object.values(CHECKPOINT_IMAGES).reduce((n, f) => n + f.length, 0),
     collected: window.FlappyLesha.collection().count(),
     assets: window.FlappyLesha.loading(),
+    stamped: Array.from(document.querySelectorAll("script[src]"))
+      .every((el) => /\?v=[0-9a-f]{8}$/.test(el.getAttribute("src"))),
+    stampedList: Array.from(document.querySelectorAll("script[src]")).length + " scripts",
   })).catch(() => ({ rows: 0, source: "?", player: "", photos: 0, frames: 0 }));
 
   const checks = [
     ["no runtime errors", errors.length === 0, errors.join(" | ")],
     ["player name kept", !!board.player, "name " + board.player],
+    ["scripts are version stamped", board.stamped, board.stampedList],
     ["leaderboard loads", board.rows > 0, board.source + ", rows " + board.rows],
     ["scored points", stats.maxScore >= 3, "max score " + stats.maxScore],
     ["katy shows up", stats.katySpawned >= 1, "spawned " + stats.katySpawned],

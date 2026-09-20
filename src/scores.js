@@ -21,8 +21,11 @@ const Scores = (function () {
     const tries = attempt || 1;
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), cfg.timeout || 9000);
+    const method = opts.method || "GET";
     return fetch(cfg.url + "/rest/v1/" + path, {
-      method: opts.method || "GET",
+      method: method,
+      // let a result still reach the server if the tab is closed right after
+      keepalive: method === "POST",
       headers: Object.assign({
         apikey: cfg.key,
         Authorization: "Bearer " + cfg.key,
@@ -60,15 +63,29 @@ const Scores = (function () {
       return clean;
     },
 
+    // A id for one run, so retrying a request the server already took cannot
+    // add the same run twice.
+    runId() {
+      try {
+        if (window.crypto && window.crypto.randomUUID) return window.crypto.randomUUID();
+      } catch (e) { /* not a secure context */ }
+      return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+        const r = (Math.random() * 16) | 0;
+        return (c === "x" ? r : (r & 0x3) | 0x8).toString(16);
+      });
+    },
+
     // Store a finished run. Resolves with whether the server took it.
-    submit(player, score) {
+    submit(player, score, runId) {
       const name = cleanName(player);
       const value = Math.max(0, Math.min(10000, Math.round(score)));
       if (!online || !name) return Promise.resolve(false);
+      const row = { player: name, score: value };
+      if (runId) row.run_id = runId;
       return request(SCORES_TABLE, {
         method: "POST",
-        headers: { Prefer: "return=minimal" },
-        body: { player: name, score: value },
+        headers: { Prefer: "return=minimal,resolution=ignore-duplicates" },
+        body: row,
       }).then(() => true).catch(() => false);
     },
 
