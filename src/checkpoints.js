@@ -1,14 +1,33 @@
-// Checkpoint screens: every few points the run pauses on a photo.
-// Photos live in assets/checkpoints/ and are inlined by tools/make_checkpoints.js
-// into src/checkpoints-data.js. Add one with:
-//   python3 tools/make_checkpoints.py 3 photo.jpg --crop cx,cy,side
-// and then list its slot in `order` below.
+// Какие Лёши попадаются на чекпоинтах и как они подписаны.
+// Кадры лежат в assets/checkpoints/<слот>/ и вшиваются в src/checkpoints-data.js
+// скриптом tools/make_checkpoints.py:
+//   python3 tools/make_checkpoints.py 5 фото.jpg --crop cx,cy,side
+//   python3 tools/make_checkpoints.py 5 кадр1.jpg кадр2.jpg   # несколько кадров = анимация
+// После этого добавьте слот в order.
 const CHECKPOINTS = {
-  every: 10,              // очков между чекпоинтами
-  order: ["1", "2"],      // фото идут по кругу: 1, 2, 1, 2, ...
+  every: 10,                       // очков между чекпоинтами
+  order: ["1", "2", "3", "4"],     // слоты, которые участвуют в розыгрыше
+  // Короткое имя - для плиток коллекции, полное - для больших экранов.
+  names: {
+    "1": "макияж",
+    "2": "ест",
+    "3": "зум",
+    "4": "шагает",
+  },
+  titles: {
+    "1": "в макияже",
+    "2": "делает вид что ест",
+    "3": "зум",
+    "4": "шагает",
+  },
   captions: {
     "1": "барселона одобряет",
     "2": "кто-то проголодался",
+    "3": "слишком близко",
+    "4": "просто идёт",
+  },
+  fps: {
+    "4": 7,                        // кадров в секунду у анимированных Лёш
   },
   cheers: [
     "так держать!",

@@ -89,6 +89,13 @@ const Sfx = (function () {
       tone(220, 0.16, { to: 120, vol: 0.45 });
       noise(0.22, 0.4);
     },
+    newFind() { // нашёлся новый Лёша
+      tone(523, 0.08, { vol: 0.32 });
+      tone(659, 0.08, { vol: 0.32, delay: 0.08 });
+      tone(784, 0.08, { vol: 0.32, delay: 0.16 });
+      tone(1046, 0.26, { vol: 0.36, delay: 0.24 });
+      tone(1318, 0.26, { vol: 0.3, delay: 0.32, type: "triangle" });
+    },
     levelUp() { // the world just got faster
       tone(392, 0.09, { vol: 0.3 });
       tone(523, 0.09, { vol: 0.3, delay: 0.09 });

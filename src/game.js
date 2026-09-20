@@ -140,22 +140,73 @@
   const CAP_H = colaCap.height;
 
   // Checkpoint photos stay photos - they are the joke, so no pixelation.
+  // A slot holds one frame, or several that loop (the walking Лёша).
   const checkpointPhotos = {};
   for (const slot in CHECKPOINT_IMAGES) {
-    const img = new Image();
-    img.src = CHECKPOINT_IMAGES[slot];
-    checkpointPhotos[slot] = img;
+    checkpointPhotos[slot] = CHECKPOINT_IMAGES[slot].map((src) => {
+      const img = new Image();
+      img.src = src;
+      return img;
+    });
+  }
+
+  // The frame to show right now: single photos never change, loops walk on.
+  function photoOf(slot) {
+    const frames = checkpointPhotos[slot];
+    if (!frames || !frames.length) return null;
+    if (frames.length === 1) return frames[0];
+    const fps = (CHECKPOINTS.fps && CHECKPOINTS.fps[slot]) || 6;
+    return frames[Math.floor(game.time * fps) % frames.length];
+  }
+
+  function photoReady(slot) {
+    const frames = checkpointPhotos[slot];
+    return !!(frames && frames.length && frames[0].complete && frames[0].naturalWidth);
+  }
+
+  function photoName(slot) {
+    return (CHECKPOINTS.names && CHECKPOINTS.names[slot]) || ("№" + slot);
+  }
+
+  function photoTitle(slot) {
+    return (CHECKPOINTS.titles && CHECKPOINTS.titles[slot]) || photoName(slot);
+  }
+
+  function drawPhoto(slot, x, y, size) {
+    const frame = photoOf(slot);
+    if (!frame || !frame.complete || !frame.naturalWidth) {
+      ctx.fillStyle = "#e4d5b4";
+      ctx.fillRect(x, y, size, size);
+      return;
+    }
+    ctx.imageSmoothingEnabled = true;
+    ctx.drawImage(frame, x, y, size, size);
+    ctx.imageSmoothingEnabled = false;
+  }
+
+  // Random, but leaning towards photos this player has not collected yet, and
+  // never the same one twice in a row while there is a choice.
+  function pickCheckpointPhoto() {
+    const all = Collection.all();
+    if (!all.length) return null;
+    const missing = Collection.missing();
+    let pool = missing.length && Math.random() < 0.7 ? missing : all;
+    if (pool.length > 1 && game.lastPhoto) {
+      const rest = pool.filter((slot) => slot !== game.lastPhoto);
+      if (rest.length) pool = rest;
+    }
+    return pool[Math.floor(Math.random() * pool.length)];
   }
 
   function currentCheckpoint() {
-    const order = CHECKPOINTS.order.filter((slot) => checkpointPhotos[slot]);
-    if (!order.length) return null;
-    const slot = order[game.checkpointIndex % order.length];
+    const slot = game.checkpointSlot;
+    if (!slot || !checkpointPhotos[slot]) return null;
     return {
       slot: slot,
-      photo: checkpointPhotos[slot],
+      title: photoTitle(slot),
       caption: CHECKPOINTS.captions[slot] || "",
-      cheer: CHECKPOINTS.cheers[game.checkpointIndex % CHECKPOINTS.cheers.length] || "",
+      cheer: CHECKPOINTS.cheers[Math.floor(game.score / CHECKPOINTS.every) % CHECKPOINTS.cheers.length] || "",
+      isNew: game.checkpointNew,
     };
   }
 
@@ -331,7 +382,7 @@
   }
 
   // --------------------------------------------------------------- game state
-  const STATE = { TITLE: 0, PLAY: 1, DYING: 2, OVER: 3, BOARD: 4, CHECKPOINT: 5 };
+  const STATE = { TITLE: 0, PLAY: 1, DYING: 2, OVER: 3, BOARD: 4, CHECKPOINT: 5, COLLECTION: 6 };
 
   const game = {
     state: STATE.TITLE,
@@ -350,8 +401,11 @@
     level: 1,
     lastGapTop: null,
     nextCheckpoint: CHECKPOINTS.every,
-    checkpointIndex: 0,
+    checkpointSlot: null,
+    checkpointNew: false,
     checkpointTimer: 0,
+    lastPhoto: null,
+    collectionPick: null,
     player: "",
     rank: null,
     submitting: false,
@@ -387,6 +441,7 @@
         if (name) {
           game.player = Scores.setName(name);
           game.best = Math.max(game.best, Scores.localBest(game.player));
+          Collection.use(game.player);
           loadBoard(true);
           Sfx.unlock();
         }
@@ -431,7 +486,8 @@
     game.level = 1;
     game.lastGapTop = null;
     game.nextCheckpoint = CHECKPOINTS.every;
-    game.checkpointIndex = 0;
+    game.checkpointSlot = null;
+    game.checkpointNew = false;
     game.checkpointTimer = 0;
     hero.y = H * 0.42;
     hero.vy = 0;
@@ -473,18 +529,40 @@
 
   function enterCheckpoint() {
     game.nextCheckpoint += CHECKPOINTS.every;
-    if (!currentCheckpoint()) return;       // no photos bundled - just play on
+    const slot = pickCheckpointPhoto();
+    if (!slot) return;                      // no photos bundled - just play on
+    game.checkpointSlot = slot;
+    game.lastPhoto = slot;
+    game.checkpointNew = Collection.add(slot);
     game.state = STATE.CHECKPOINT;
     game.checkpointTimer = 0;
     game.flash = Math.max(game.flash, 0.3);
-    Sfx.levelUp();
+    if (game.checkpointNew) {
+      Sfx.newFind();
+      burst(W / 2, 150, 26, ["#ffd447", "#ff3ea5", "#ffffff"], 3);
+    } else {
+      Sfx.levelUp();
+    }
   }
 
   function leaveCheckpoint() {
-    game.checkpointIndex++;
     game.state = STATE.PLAY;
     game.invuln = Math.max(game.invuln, 1.2);   // a moment to get your bearings
     Sfx.swoosh();
+  }
+
+  function openCollection() {
+    if (game.state === STATE.COLLECTION) return;
+    game.boardFrom = game.state === STATE.OVER ? STATE.OVER : STATE.TITLE;
+    game.collectionPick = null;
+    game.state = STATE.COLLECTION;
+    Collection.use(game.player);
+  }
+
+  function closeCollection() {
+    if (game.collectionPick) { game.collectionPick = null; return; }
+    game.state = game.boardFrom;
+    if (game.state === STATE.OVER) game.overTimer = Math.max(game.overTimer, 1);
   }
 
   // A level every few points: the world gets faster and the player is told so.
@@ -785,12 +863,14 @@
 
     // How fast the scenery slides this frame; clouds drift on top of it.
     let scrollSpeed = 0;
-    if (game.state === STATE.TITLE || game.state === STATE.BOARD) scrollSpeed = speed() * 0.6;
+    if (game.state === STATE.TITLE || game.state === STATE.BOARD ||
+        game.state === STATE.COLLECTION) scrollSpeed = speed() * 0.6;
     else if (game.state === STATE.PLAY) scrollSpeed = speed();
     game.scroll += scrollSpeed;
     updateSky(dt, scrollSpeed);
 
-    if (game.state === STATE.TITLE || game.state === STATE.BOARD) {
+    if (game.state === STATE.TITLE || game.state === STATE.BOARD ||
+        game.state === STATE.COLLECTION) {
       hero.y = 138 + Math.sin(game.time * 3) * 6;
       hero.angle = Math.sin(game.time * 3) * 0.12;
     } else if (game.state === STATE.PLAY) {
@@ -1013,15 +1093,29 @@
     if (game.state === STATE.TITLE) {
       return [
         { id: "play", x: 60, y: 300, w: 200, h: 32, label: "играть", primary: true, scale: 2 },
-        { id: "board", x: 60, y: 340, w: 96, h: 26, label: "рейтинг" },
-        { id: "name", x: 164, y: 340, w: 96, h: 26, label: "имя" },
+        { id: "board", x: 24, y: 340, w: 84, h: 26, label: "рейтинг" },
+        { id: "collection", x: 118, y: 340, w: 84, h: 26, label: "лёши" },
+        { id: "name", x: 212, y: 340, w: 84, h: 26, label: "имя" },
       ];
     }
     if (game.state === STATE.OVER) {
       return [
         { id: "again", x: 60, y: 300, w: 200, h: 32, label: "ещё раз", primary: true, scale: 2 },
-        { id: "board", x: 60, y: 340, w: 200, h: 26, label: "рейтинг" },
+        { id: "board", x: 59, y: 340, w: 96, h: 26, label: "рейтинг" },
+        { id: "collection", x: 165, y: 340, w: 96, h: 26, label: "лёши" },
       ];
+    }
+    if (game.state === STATE.COLLECTION) {
+      const list = [{ id: "back", x: 90, y: 428, w: 140, h: 28, label: "назад", primary: true }];
+      if (!game.collectionPick) {
+        // every found photo is tappable, so you can look at it properly
+        for (const cell of collectionCells()) {
+          if (Collection.has(cell.slot)) {
+            list.push({ id: "cell:" + cell.slot, x: cell.x, y: cell.y, w: CELL, h: CELL, invisible: true });
+          }
+        }
+      }
+      return list;
     }
     if (game.state === STATE.CHECKPOINT) {
       return game.checkpointTimer > 0.5
@@ -1044,9 +1138,11 @@
   function onButton(id) {
     Sfx.unlock();
     if (id !== "sound") Sfx.swoosh();
+    if (id.indexOf("cell:") === 0) { game.collectionPick = id.slice(5); return; }
     if (id === "play" || id === "again") { game.paused = false; press(); }
     else if (id === "board") openBoard();
-    else if (id === "back") closeBoard();
+    else if (id === "back") { if (game.state === STATE.COLLECTION) closeCollection(); else closeBoard(); }
+    else if (id === "collection") openCollection();
     else if (id === "continue") leaveCheckpoint();
     else if (id === "refresh") loadBoard(true);
     else if (id === "name") askName(false);
@@ -1056,6 +1152,7 @@
   }
 
   function drawButton(b) {
+    if (b.invisible) return;       // tap targets over the collection grid
     if (b.icon) {
       ctx.fillStyle = "rgba(26,16,36,0.45)";
       ctx.fillRect(b.x, b.y, b.w, b.h);
@@ -1231,12 +1328,22 @@
     ctx.fillStyle = "rgba(20,12,30,0.72)";
     ctx.fillRect(0, 0, W, H);
 
-    drawText(ctx, "чекпоинт", W / 2, 44, {
-      scale: 3, color: "#ffd447", align: "center", outline: COLORS.ink,
-    });
-    drawText(ctx, game.score + " очков", W / 2, 80, {
-      scale: 2, color: COLORS.paper, align: "center", outline: COLORS.ink,
-    });
+    if (cp.isNew) {
+      const blink = Math.floor(game.time * 4) % 2 === 0;
+      drawText(ctx, "новый лёша!", W / 2, 40, {
+        scale: 3, color: blink ? "#ffd447" : "#fff3ad", align: "center", outline: COLORS.ink,
+      });
+      drawText(ctx, "добавлен в коллекцию", W / 2, 78, {
+        scale: 1, color: "#9fe8a0", align: "center", outline: COLORS.ink,
+      });
+    } else {
+      drawText(ctx, "чекпоинт", W / 2, 44, {
+        scale: 3, color: "#ffd447", align: "center", outline: COLORS.ink,
+      });
+      drawText(ctx, game.score + " очков", W / 2, 80, {
+        scale: 2, color: COLORS.paper, align: "center", outline: COLORS.ink,
+      });
+    }
 
     const fx = 32;
     const fy = 104;
@@ -1250,24 +1357,93 @@
     ctx.fillStyle = "#fffdf6";
     ctx.fillRect(fx, fy, fw, pw + 62);
 
-    if (cp.photo.complete && cp.photo.naturalWidth) {
-      ctx.imageSmoothingEnabled = true;
-      ctx.drawImage(cp.photo, px, py, pw, pw);
-      ctx.imageSmoothingEnabled = false;
-    } else {
-      ctx.fillStyle = "#e4d5b4";
-      ctx.fillRect(px, py, pw, pw);
-    }
+    drawPhoto(cp.slot, px, py, pw);
     ctx.strokeStyle = "rgba(26,16,36,0.35)";
     ctx.strokeRect(px + 0.5, py + 0.5, pw - 1, pw - 1);
 
-    drawText(ctx, cp.caption, W / 2, py + pw + 14, {
-      scale: 1, color: COLORS.ink, align: "center",
+    const label = "лёша " + cp.title;
+    drawText(ctx, label, W / 2, py + pw + 12, {
+      scale: label.length > 14 ? 1 : 2, color: COLORS.ink, align: "center",
     });
-    drawText(ctx, cp.cheer, W / 2, py + pw + 30, {
+    drawText(ctx, cp.isNew ? cp.caption : cp.cheer, W / 2, py + pw + 34, {
       scale: 1, color: "#c41f77", align: "center",
     });
 
+  }
+
+  // "Коллекция Лёш": a grid of finds, tap one to see it big.
+  const CELL = 84;
+  const CELL_GAP = 10;
+  const GRID_X = (W - (CELL * 3 + CELL_GAP * 2)) / 2;
+  const GRID_Y = 92;
+
+  function collectionCells() {
+    const all = Collection.all();
+    return all.map((slot, i) => ({
+      slot: slot,
+      x: GRID_X + (i % 3) * (CELL + CELL_GAP),
+      y: GRID_Y + Math.floor(i / 3) * (CELL + 24),
+    }));
+  }
+
+  function drawCollection() {
+    ctx.fillStyle = "rgba(20,12,30,0.72)";
+    ctx.fillRect(0, 0, W, H);
+
+    drawText(ctx, "коллекция лёш", W / 2, 20, {
+      scale: 2, color: "#ffd447", align: "center", outline: COLORS.ink,
+    });
+    const all = Collection.all();
+    drawText(ctx, "найдено " + Collection.count() + " из " + all.length, W / 2, 48, {
+      scale: 1, color: COLORS.paper, align: "center", outline: COLORS.ink,
+    });
+    drawText(ctx, "новые попадаются на чекпоинтах", W / 2, 64, {
+      scale: 1, color: "#b9a9d6", align: "center", outline: COLORS.ink,
+    });
+
+    if (game.collectionPick) {
+      const slot = game.collectionPick;
+      const fx = 32;
+      const fy = 96;
+      const fw = W - 64;
+      const pw = fw - 20;
+      ctx.fillStyle = COLORS.ink;
+      ctx.fillRect(fx - 3, fy - 3, fw + 6, pw + 62 + 6);
+      ctx.fillStyle = "#fffdf6";
+      ctx.fillRect(fx, fy, fw, pw + 62);
+      drawPhoto(slot, fx + 10, fy + 10, pw);
+      const title = "лёша " + photoTitle(slot);
+      drawText(ctx, title, W / 2, fy + pw + 22, {
+        scale: title.length > 14 ? 1 : 2, color: COLORS.ink, align: "center",
+      });
+      drawText(ctx, CHECKPOINTS.captions[slot] || "", W / 2, fy + pw + 44, {
+        scale: 1, color: "#c41f77", align: "center",
+      });
+      return;
+    }
+
+    for (const cell of collectionCells()) {
+      const found = Collection.has(cell.slot);
+      ctx.fillStyle = COLORS.ink;
+      ctx.fillRect(cell.x - 2, cell.y - 2, CELL + 4, CELL + 4);
+      if (found) {
+        ctx.fillStyle = "#fffdf6";
+        ctx.fillRect(cell.x, cell.y, CELL, CELL);
+        drawPhoto(cell.slot, cell.x + 3, cell.y + 3, CELL - 6);
+        drawText(ctx, photoName(cell.slot), cell.x + CELL / 2, cell.y + CELL + 6, {
+          scale: 1, color: COLORS.paper, align: "center", outline: COLORS.ink,
+        });
+      } else {
+        ctx.fillStyle = "#2c1b44";
+        ctx.fillRect(cell.x, cell.y, CELL, CELL);
+        drawText(ctx, "?", cell.x + CELL / 2, cell.y + CELL / 2 - 14, {
+          scale: 4, color: "#5a4577", align: "center",
+        });
+        drawText(ctx, "не найден", cell.x + CELL / 2, cell.y + CELL + 6, {
+          scale: 1, color: "#8a77ad", align: "center",
+        });
+      }
+    }
   }
 
   function drawGameOver() {
@@ -1324,7 +1500,8 @@
     for (const o of obstacles) drawBottle(o);
     for (const e of enemies) drawEnemy(e);
     for (const b of bonuses) drawBonus(b);
-    if (game.state !== STATE.TITLE && game.state !== STATE.BOARD) drawHero();
+    if (game.state !== STATE.TITLE && game.state !== STATE.BOARD &&
+        game.state !== STATE.COLLECTION) drawHero();
     drawParticles();
     drawTiled(groundTile, game.scroll, GROUND_Y);
     drawPopups();
@@ -1333,6 +1510,7 @@
     if (game.state === STATE.OVER) drawGameOver();
     if (game.state === STATE.BOARD) drawBoard();
     if (game.state === STATE.CHECKPOINT) drawCheckpoint();
+    if (game.state === STATE.COLLECTION) drawCollection();
     drawHud();
     if (!game.paused) drawButtons();
 
@@ -1359,6 +1537,7 @@
       if (game.checkpointTimer > 0.5) leaveCheckpoint();
       return;
     }
+    if (game.state === STATE.COLLECTION) { closeCollection(); return; }
     if (!game.player) { askName(true); return; }
 
     if (game.state === STATE.TITLE) {
@@ -1400,12 +1579,15 @@
       game.paused = !game.paused;
     } else if (e.code === "KeyR") {
       if (!game.dialogOpen) reset();
+    } else if (e.code === "KeyC") {
+      if (!game.dialogOpen) { if (game.state === STATE.COLLECTION) closeCollection(); else openCollection(); }
     } else if (e.code === "KeyL") {
       if (!game.dialogOpen) { if (game.state === STATE.BOARD) closeBoard(); else openBoard(); }
     } else if (e.code === "KeyN") {
       askName(false);
     } else if (e.code === "Escape") {
-      if (game.state === STATE.BOARD) closeBoard();
+      if (game.state === STATE.COLLECTION) closeCollection();
+      else if (game.state === STATE.BOARD) closeBoard();
       else if (game.paused) game.paused = false;
     }
   });
@@ -1444,6 +1626,7 @@
   seedClouds();
   game.player = Scores.getName();
   game.best = Math.max(game.best, Scores.localBest(game.player));
+  Collection.use(game.player);
   loadBoard(false);
   Scores.retryPending();
   if (!game.player) askName(true);
@@ -1465,6 +1648,8 @@
     askName: askName,
     openBoard: openBoard,
     checkpoint: currentCheckpoint,
+    openCollection: openCollection,
+    collection: () => Collection,
     loadBoard: loadBoard,
     gapSize: gapSize,
     speed: speed,

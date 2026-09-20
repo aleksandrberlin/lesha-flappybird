@@ -48,3 +48,39 @@ from public.flappy_lesha_scores
 order by upper(btrim(player)), score desc, created_at asc;
 
 grant select on public.flappy_lesha_leaderboard to anon, authenticated;
+
+-- Which checkpoint photos ("Лёши") each player has found. Append only as well:
+-- a player may add a find, nobody can edit or delete one, and a repeat find is
+-- ignored thanks to the unique index.
+create table if not exists public.flappy_lesha_finds (
+  player text not null,
+  player_key text generated always as (upper(btrim(player))) stored,
+  photo text not null,
+  created_at timestamptz not null default now(),
+  constraint flappy_lesha_finds_player_len
+    check (char_length(btrim(player)) between 1 and 12),
+  constraint flappy_lesha_finds_photo_len
+    check (char_length(btrim(photo)) between 1 and 16)
+);
+
+create unique index if not exists flappy_lesha_finds_unique
+  on public.flappy_lesha_finds (player_key, photo);
+
+alter table public.flappy_lesha_finds enable row level security;
+
+drop policy if exists flappy_lesha_finds_read on public.flappy_lesha_finds;
+create policy flappy_lesha_finds_read
+  on public.flappy_lesha_finds
+  for select
+  to anon, authenticated
+  using (true);
+
+drop policy if exists flappy_lesha_finds_append on public.flappy_lesha_finds;
+create policy flappy_lesha_finds_append
+  on public.flappy_lesha_finds
+  for insert
+  to anon, authenticated
+  with check (
+    char_length(btrim(player)) between 1 and 12
+    and char_length(btrim(photo)) between 1 and 16
+  );

@@ -44,7 +44,7 @@ const INSECURE = !!process.env.SMOKE_INSECURE;
     const L = F.layout;
     window.__stats = {
       maxScore: 0, katySpawned: 0, livesTaken: 0, maxLives: 1,
-      enemyKinds: {}, deaths: 0, overSeen: 0, checkpoints: 0,
+      enemyKinds: {}, deaths: 0, overSeen: 0, checkpoints: 0, newFinds: 0,
     };
     let wasOver = false;
     let wasCheckpoint = false;
@@ -67,7 +67,11 @@ const INSECURE = !!process.env.SMOKE_INSECURE;
       for (const e of F.enemies()) st.enemyKinds[e.kind] = (st.enemyKinds[e.kind] || 0) + 1;
 
       if (g.state === F.STATE.CHECKPOINT) {
-        if (!wasCheckpoint) { st.checkpoints++; wasCheckpoint = true; }
+        if (!wasCheckpoint) {
+          st.checkpoints++;
+          if (g.checkpointNew) st.newFinds++;
+          wasCheckpoint = true;
+        }
         F.press();                                  // ignored until it is dismissable
       } else if (g.state === F.STATE.OVER) {
         wasCheckpoint = false;
@@ -112,7 +116,9 @@ const INSECURE = !!process.env.SMOKE_INSECURE;
     source: window.FlappyLesha.game.board.source,
     player: window.FlappyLesha.game.player,
     photos: Object.keys(CHECKPOINT_IMAGES).length,
-  })).catch(() => ({ rows: 0, source: "?", player: "", photos: 0 }));
+    frames: Object.values(CHECKPOINT_IMAGES).reduce((n, f) => n + f.length, 0),
+    collected: window.FlappyLesha.collection().count(),
+  })).catch(() => ({ rows: 0, source: "?", player: "", photos: 0, frames: 0 }));
 
   const checks = [
     ["no runtime errors", errors.length === 0, errors.join(" | ")],
@@ -125,9 +131,11 @@ const INSECURE = !!process.env.SMOKE_INSECURE;
     ["flying enemies appear", Object.keys(stats.enemyKinds).length >= 1,
       Object.keys(stats.enemyKinds).join(",") || "none"],
     ["game over works", stats.overSeen >= 1, "deaths " + stats.deaths],
-    ["checkpoint photos bundled", board.photos >= 1, board.photos + " photo(s)"],
+    ["лёши bundled", board.photos >= 1, board.photos + " лёш(и), " + board.frames + " frame(s)"],
     ["checkpoint screen shows up", stats.maxScore < 10 || stats.checkpoints >= 1,
       "seen " + stats.checkpoints + " at best score " + stats.maxScore],
+    ["collection picks up finds", stats.checkpoints === 0 || stats.newFinds >= 1,
+      "new finds " + stats.newFinds + " of " + stats.checkpoints + " checkpoint(s)"],
   ];
   let failed = 0;
   for (const [name, ok, info] of checks) {

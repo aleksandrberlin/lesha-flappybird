@@ -3,6 +3,7 @@
 // runs made without a connection are re-sent later.
 const Scores = (function () {
   const cfg = typeof LEADERBOARD_CONFIG === "object" ? LEADERBOARD_CONFIG : { mode: "local" };
+  const FINDS_TABLE = "flappy_lesha_finds";
   const LOCAL_KEY = "flappyLesha.board";
   const QUEUE_KEY = "flappyLesha.pending";
   const NAME_KEY = "flappyLesha.player";
@@ -175,6 +176,29 @@ const Scores = (function () {
         const better = localRows().filter((r) => r.score > value).length;
         return better + 1;
       });
+    },
+
+    // ------------------------------------------------- collection of photos
+    // Which checkpoint photos this player has found, according to the cloud.
+    finds(player) {
+      const name = cleanName(player);
+      if (!online || !name) return Promise.resolve([]);
+      const query = FINDS_TABLE + "?select=photo&player_key=eq." + encodeURIComponent(name.toUpperCase());
+      return request(query)
+        .then((res) => res.json())
+        .then((rows) => rows.map((r) => r.photo))
+        .catch(() => []);
+    },
+
+    // Record a find. Repeats are ignored by the unique index on the table.
+    addFind(player, photo) {
+      const name = cleanName(player);
+      if (!online || !name || !photo) return Promise.resolve(false);
+      return request(FINDS_TABLE, {
+        method: "POST",
+        headers: { Prefer: "return=minimal,resolution=ignore-duplicates" },
+        body: { player: name, photo: String(photo).slice(0, 16) },
+      }).then(() => true).catch(() => false);
     },
 
     retryPending: flushQueue,
