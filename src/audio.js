@@ -89,9 +89,11 @@ const Sfx = (function () {
       tone(220, 0.16, { to: 120, vol: 0.45 });
       noise(0.22, 0.4);
     },
-    snap() { // paparazzi camera
-      noise(0.08, 0.35);
-      tone(1400, 0.05, { to: 900, vol: 0.2, type: "triangle" });
+    levelUp() { // the world just got faster
+      tone(392, 0.09, { vol: 0.3 });
+      tone(523, 0.09, { vol: 0.3, delay: 0.09 });
+      tone(659, 0.09, { vol: 0.3, delay: 0.18 });
+      tone(880, 0.2, { vol: 0.32, delay: 0.27 });
     },
   };
 })();

@@ -17,11 +17,18 @@
   const FLAP_V = -5.1;
   const MAX_FALL = 8.4;
 
+  // Difficulty ramp: the world speeds up, the gaps tighten and the bottles
+  // start standing closer together, all reaching their limit around score 45.
   const SPEED_BASE = 1.75;
-  const SPEED_MAX = 2.95;
-  const GAP_BASE = 148;
-  const GAP_MIN = 112;
-  const SPACING = 176;
+  const SPEED_MAX = 3.7;
+  const SPEED_RAMP = 50;
+  const GAP_BASE = 150;
+  const GAP_MIN = 100;
+  const GAP_RAMP = 40;
+  const SPACING_BASE = 186;
+  const SPACING_MIN = 156;
+  const SPACING_RAMP = 34;
+  const LEVEL_EVERY = 8;
 
   const COLA_SCALE = 2;
   const COLA_W = 28 * COLA_SCALE;
@@ -320,6 +327,8 @@
     enemyTimer: 5,
     lives: 1,
     invuln: 0,
+    level: 1,
+    lastGapTop: null,
     player: "",
     rank: null,
     submitting: false,
@@ -373,11 +382,17 @@
     if (game.state === STATE.OVER) game.overTimer = Math.max(game.overTimer, 1);
   }
 
+  function ramp(points) {
+    return Math.min(1, game.score / points);
+  }
   function speed() {
-    return Math.min(SPEED_MAX, SPEED_BASE + game.score * 0.025);
+    return SPEED_BASE + (SPEED_MAX - SPEED_BASE) * ramp(SPEED_RAMP);
   }
   function gapSize() {
-    return Math.max(GAP_MIN, GAP_BASE - game.score * 1.3);
+    return GAP_BASE - (GAP_BASE - GAP_MIN) * ramp(GAP_RAMP);
+  }
+  function spacing() {
+    return SPACING_BASE - (SPACING_BASE - SPACING_MIN) * ramp(SPACING_RAMP);
   }
 
   function reset() {
@@ -390,6 +405,8 @@
     game.enemyTimer = 5;
     game.lives = 1;
     game.invuln = 0;
+    game.level = 1;
+    game.lastGapTop = null;
     hero.y = H * 0.42;
     hero.vy = 0;
     hero.angle = 0;
@@ -402,11 +419,40 @@
   }
 
   function spawnObstacle() {
-    const gap = gapSize();
-    const minTop = 78;
-    const maxTop = GROUND_Y - gap - 78;
-    const gapTop = minTop + Math.random() * Math.max(10, maxTop - minTop);
-    obstacles.push({ x: W + 20, gapTop: Math.round(gapTop), gap: Math.round(gap), scored: false });
+    const t = ramp(GAP_RAMP);
+    // every so often a pair stands tighter than the current baseline
+    const squeeze = Math.random() < 0.25 + t * 0.2 ? 6 + Math.random() * 12 * t : 0;
+    const gap = Math.max(92, Math.round(gapSize() - squeeze));
+
+    const minTop = 74;
+    const maxTop = GROUND_Y - gap - 74;
+    // later on the gaps stop drifting gently and start jumping up and down
+    const jump = 24 + 70 * ramp(SPEED_RAMP);
+    let gapTop = minTop;
+    for (let i = 0; i < 6; i++) {
+      gapTop = minTop + Math.random() * Math.max(10, maxTop - minTop);
+      if (game.lastGapTop === null || Math.abs(gapTop - game.lastGapTop) >= jump) break;
+    }
+    game.lastGapTop = gapTop;
+
+    obstacles.push({
+      x: W + 20,
+      gapTop: Math.round(gapTop),
+      gap: gap,
+      // distance until the next pair, so the rhythm varies too
+      spacing: Math.round(spacing() + (Math.random() - 0.5) * 24),
+      scored: false,
+    });
+  }
+
+  // A level every few points: the world gets faster and the player is told so.
+  function checkLevel() {
+    const level = Math.floor(game.score / LEVEL_EVERY) + 1;
+    if (level <= game.level) return;
+    game.level = level;
+    game.flash = Math.max(game.flash, 0.22);
+    popup("скорость +", W / 2, 132, "#ffd447", 2);
+    Sfx.levelUp();
   }
 
   // Where the cola bottles will be, in frames from now - used to send Katy
@@ -416,7 +462,8 @@
     const xs = obstacles.map((o) => o.x);
     if (xs.length) {
       const last = Math.max.apply(null, xs);
-      for (let k = 1; k <= 4; k++) xs.push(last + SPACING * k);
+      const step = spacing();
+      for (let k = 1; k <= 4; k++) xs.push(last + step * k);
     }
     for (const x0 of xs) {
       const x = x0 - drift;
@@ -461,8 +508,6 @@
       // paparazzi drone: creeps in and drifts towards the player's height
       e.vx = fairSpeed(spawnX, base * 0.85, base * 1.5);
       e.chase = 0.38;
-      e.flashIn = 1.4 + Math.random();
-      e.flash = 0;
       e.baseY = 60 + Math.random() * (GROUND_Y - 170);
     }
     e.y = e.baseY;
@@ -513,8 +558,11 @@
     }
   }
 
-  function popup(text, x, y, color) {
-    popups.push({ text: text, x: x, y: y, life: 1, color: color || COLORS.paper });
+  function popup(text, x, y, color, scale) {
+    popups.push({
+      text: text, x: x, y: y, life: 1,
+      color: color || COLORS.paper, scale: scale || 1,
+    });
   }
 
   function flap() {
@@ -654,15 +702,6 @@
         const dy = cy - (e.y + e.def.h / 2);
         e.y += Math.max(-e.chase, Math.min(e.chase, dy));
         e.y = Math.max(16, Math.min(GROUND_Y - e.def.h - 8, e.y));
-        e.flash = Math.max(0, e.flash - dt);
-        e.flashIn -= dt;
-        if (e.flashIn <= 0 && e.x < W - 20) {
-          e.flashIn = 2.4 + Math.random();
-          e.flash = 0.16;
-          // a wink of light, not a whiteout - the player must still see the gap
-          game.flash = Math.max(game.flash, 0.14);
-          Sfx.snap();
-        }
       }
 
       if (!e.scored && e.x + e.def.w < HERO_X) {
@@ -670,6 +709,7 @@
         game.score++;
         Sfx.score();
         popup("+1", HERO_X + 26, hero.y - 6, COLORS.paper);
+        checkLevel();
       }
     }
     enemies = enemies.filter((e) => e.x + e.def.w > -40);
@@ -714,7 +754,8 @@
 
       if (hero.y < -HERO_SIZE) { hero.y = -HERO_SIZE; hero.vy = 0; }
 
-      if (!obstacles.length || obstacles[obstacles.length - 1].x < W - SPACING) spawnObstacle();
+      const last = obstacles[obstacles.length - 1];
+      if (!last || last.x < W - last.spacing) spawnObstacle();
 
       for (const o of obstacles) {
         o.x -= speed();
@@ -723,6 +764,7 @@
           game.score++;
           Sfx.score();
           popup("+1", HERO_X + 26, hero.y - 6, COLORS.paper);
+          checkLevel();
         }
       }
       obstacles = obstacles.filter((o) => o.x + COLA_W > -10);
@@ -730,9 +772,9 @@
       // flying enemies, unlocked one kind at a time as the score grows
       game.enemyTimer -= dt;
       if (game.enemyTimer <= 0) {
-        game.enemyTimer = Math.max(2.6, 5.5 - game.score * 0.06) + Math.random() * 2.2;
+        game.enemyTimer = Math.max(2.2, 5.5 - game.score * 0.07) + Math.random() * 2;
         const kind = pickEnemyKind();
-        if (kind && enemies.length < 3) spawnEnemy(kind);
+        if (kind && enemies.length < (game.score >= 25 ? 4 : 3)) spawnEnemy(kind);
       }
 
       // Katy shows up regularly while there is a life to win
@@ -873,11 +915,6 @@
     } else {
       const frame = Math.floor(e.t * 16) % 2;
       ctx.drawImage(droneFrames[frame], x, y);
-      if (e.flash > 0) {
-        // camera flash
-        ctx.fillStyle = "rgba(255,255,255," + Math.min(0.85, e.flash * 5) + ")";
-        ctx.fillRect(x - 6, y + 6, e.def.w + 12, 12);
-      }
     }
   }
 
@@ -911,7 +948,9 @@
   function drawPopups() {
     for (const t of popups) {
       ctx.globalAlpha = Math.max(0, Math.min(1, t.life));
-      drawText(ctx, t.text, t.x, t.y, { scale: 1, color: t.color, align: "center", outline: COLORS.ink });
+      drawText(ctx, t.text, t.x, t.y, {
+        scale: t.scale, color: t.color, align: "center", outline: COLORS.ink,
+      });
     }
     ctx.globalAlpha = 1;
   }
@@ -1320,6 +1359,8 @@
     openBoard: openBoard,
     loadBoard: loadBoard,
     gapSize: gapSize,
+    speed: speed,
+    spacing: spacing,
     layout: { W: W, H: H, HERO_X: HERO_X, HERO_SIZE: HERO_SIZE, COLA_W: COLA_W, GROUND_Y: GROUND_Y },
   };
 
