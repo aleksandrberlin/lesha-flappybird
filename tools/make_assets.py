@@ -276,6 +276,31 @@ CAN = {
     ],
 }
 
+# Spider-man hanging off his web: one arm up on the rope, legs tucked.
+SPIDER = {
+    "w": 14,
+    "pal": {"R": "#d2222d", "r": "#8f1620", "B": "#1d3fa8", "b": "#132a70",
+            "W": "#ffffff", "K": "#1a1024"},
+    "rows": [
+        "......RR......",
+        "......RR......",
+        ".....RRr......",
+        "....RRr.......",
+        "...KRRRRK.....",
+        "..KRWWRWWRK...",
+        "..KRWWRWWRK...",
+        "...KRRRRK.....",
+        "...BRRRRB.....",
+        "..BBRRRRBB....",
+        "..BBRRRRBB....",
+        "...BBRRBB.....",
+        "...BB..BB.....",
+        "..BB....BB....",
+        "..RB....BR....",
+        "..RR....RR....",
+    ],
+}
+
 # Heart used for the extra lives Katy hands out.
 HEART = {
     "w": 7,
@@ -381,7 +406,7 @@ def main():
         "katy": KATY, "colaCap": COLA_CAP, "colaBody": COLA_BODY,
         "gullUp": GULL_UP, "gullDown": GULL_DOWN,
         "droneA": DRONE_A, "droneB": DRONE_B,
-        "can": CAN, "heart": HEART,
+        "can": CAN, "heart": HEART, "spider": SPIDER,
     }
     for name, sp in sprites.items():
         check(sp, name)

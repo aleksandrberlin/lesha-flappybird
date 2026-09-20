@@ -44,6 +44,7 @@
     gull:  { w: 30, h: 22, inset: 5, unlock: 2,  weight: 3, label: "чайка" },
     can:   { w: 22, h: 26, inset: 3, unlock: 7,  weight: 2, label: "банка" },
     drone: { w: 32, h: 22, inset: 5, unlock: 12, weight: 2, label: "дрон" },
+    spider: { w: 28, h: 32, inset: 6, unlock: 5, weight: 2, label: "паук" },
   };
 
   const COLORS = {
@@ -127,6 +128,8 @@
   const droneFrames = [buildSprite(SP.droneA, 2), buildSprite(SP.droneB, 2)];
   const droneTiny = buildSprite(SP.droneA, 1);
   const canSprite = buildSprite(SP.can, 2);
+  const spiderSprite = buildSprite(SP.spider, 2);
+  const spiderTiny = buildSprite(SP.spider, 1);
   const canTiny = buildSprite(SP.can, 1);
   const heartSprite = buildSprite(SP.heart, 2);
   const heartTiny = buildSprite(SP.heart, 1);
@@ -204,7 +207,6 @@
     return {
       slot: slot,
       title: photoTitle(slot),
-      caption: CHECKPOINTS.captions[slot] || "",
       cheer: CHECKPOINTS.cheers[Math.floor(game.score / CHECKPOINTS.every) % CHECKPOINTS.cheers.length] || "",
       isNew: game.checkpointNew,
     };
@@ -214,6 +216,37 @@
   let heroReady = false;
   heroImg.onload = () => { heroReady = true; };
   heroImg.src = HERO_PNG;
+
+  // Nothing should load mid-run: every photo is fetched and decoded up front,
+  // so a found Лёша appears the instant the checkpoint opens.
+  const loading = { total: 0, done: 0, timer: 0 };
+
+  function trackAsset(img) {
+    loading.total++;
+    const finish = () => { loading.done++; };
+    if (img.decode) {
+      img.decode().then(finish, finish);
+    } else if (img.complete) {
+      finish();
+    } else {
+      img.onload = finish;
+      img.onerror = finish;
+    }
+  }
+
+  trackAsset(heroImg);
+  for (const slot in checkpointPhotos) {
+    for (const frame of checkpointPhotos[slot]) trackAsset(frame);
+  }
+
+  function loadingProgress() {
+    return loading.total ? Math.min(1, loading.done / loading.total) : 1;
+  }
+
+  function finishLoading() {
+    game.state = STATE.TITLE;
+    if (!game.player) askName(true);
+  }
 
   // ------------------------------------------------------------- backgrounds
   // Deterministic pseudo random so the scenery is the same every run.
@@ -382,10 +415,10 @@
   }
 
   // --------------------------------------------------------------- game state
-  const STATE = { TITLE: 0, PLAY: 1, DYING: 2, OVER: 3, BOARD: 4, CHECKPOINT: 5, COLLECTION: 6 };
+  const STATE = { LOADING: 7, TITLE: 0, PLAY: 1, DYING: 2, OVER: 3, BOARD: 4, CHECKPOINT: 5, COLLECTION: 6 };
 
   const game = {
-    state: STATE.TITLE,
+    state: STATE.LOADING,
     score: 0,
     best: Number(localStorage.getItem(BEST_KEY) || 0),
     scroll: 0,
@@ -628,6 +661,15 @@
       e.accel = 0.05;
       e.baseY = 60 + Math.random() * (GROUND_Y - 160);
       e.spin = 0;
+    } else if (kind === "spider") {
+      // one swing across the screen on a web strung from the top edge
+      e.vx = fairSpeed(spawnX, base * 0.9, base * 1.6);
+      e.rope = 110 + Math.random() * 80;
+      e.swing = 0.85 + Math.random() * 0.25;     // half of the arc, in radians
+      e.progress = 0;
+      e.duration = 1.7 + Math.random() * 0.7;
+      e.anchorY = -8;
+      e.baseY = e.anchorY + e.rope;              // only used before the first step
     } else {
       // paparazzi drone: creeps in and drifts towards the player's height
       e.vx = fairSpeed(spawnX, base * 0.85, base * 1.5);
@@ -708,6 +750,7 @@
       gull: ["#ffffff", "#b9c4d4", "#8b97ab"],
       can: ["#e2243a", "#d8dce8", "#ffffff"],
       drone: ["#2b2438", "#c8ccd8", "#ff4d4d"],
+      spider: ["#d2222d", "#1d3fa8", "#ffffff"],
       ground: [COLORS.dirt, COLORS.dirtDark, "#ffffff"],
     }[cause] || ["#ffffff", "#ffd447"];
     if (cause === "cola" || cause === "can") Sfx.cola();
@@ -758,7 +801,10 @@
     }
     for (const e of enemies) {
       const i = e.def.inset;
-      if (circleRect(cx, cy, HERO_R, e.x + i, e.y + i, e.def.w - i * 2, e.def.h - i * 2)) {
+      const bx = e.kind === "spider" ? e.hitX : e.x;
+      const by = e.kind === "spider" ? e.hitY : e.y;
+      if (bx === undefined) continue;
+      if (circleRect(cx, cy, HERO_R, bx + i, by + i, e.def.w - i * 2, e.def.h - i * 2)) {
         return { kind: e.kind, enemy: e };
       }
     }
@@ -809,6 +855,20 @@
       if (e.kind === "gull") {
         e.x -= e.vx;
         e.y = e.baseY + Math.sin(e.t * e.freq) * e.amp;
+      } else if (e.kind === "spider") {
+        // the anchor slides along with the scenery while he swings under it
+        e.x -= e.vx;
+        e.progress = Math.min(1, e.progress + dt / e.duration);
+        e.angle = e.swing * Math.cos(Math.PI * e.progress);
+        e.anchorX = e.x + e.def.w / 2;
+        const hx = e.anchorX + Math.sin(e.angle) * e.rope;
+        const hy = e.anchorY + Math.cos(e.angle) * e.rope;
+        e.handX = hx;
+        e.handY = hy;
+        e.drawX = hx - e.def.w / 2;
+        e.drawY = hy;
+        e.hitX = e.drawX;
+        e.hitY = hy + 6;
       } else if (e.kind === "can") {
         e.vx = Math.min(e.vx + e.accel, 7.5);
         e.x -= e.vx;
@@ -869,7 +929,16 @@
     game.scroll += scrollSpeed;
     updateSky(dt, scrollSpeed);
 
-    if (game.state === STATE.TITLE || game.state === STATE.BOARD ||
+    if (game.state === STATE.LOADING) {
+      loading.timer += dt;
+      hero.y = 182 + Math.sin(game.time * 3) * 5;
+      hero.angle = Math.sin(game.time * 3) * 0.1;
+      // a short floor so the bar is readable, and a ceiling so a stuck image
+      // can never keep the game from starting
+      if ((loadingProgress() >= 1 && loading.timer > 0.45) || loading.timer > 12) {
+        finishLoading();
+      }
+    } else if (game.state === STATE.TITLE || game.state === STATE.BOARD ||
         game.state === STATE.COLLECTION) {
       hero.y = 138 + Math.sin(game.time * 3) * 6;
       hero.angle = Math.sin(game.time * 3) * 0.12;
@@ -1036,6 +1105,22 @@
     if (e.kind === "gull") {
       const frame = Math.floor(e.t * 7) % 2;
       ctx.drawImage(gullFrames[frame], x, y);
+    } else if (e.kind === "spider") {
+      if (e.handX === undefined) return;
+      ctx.strokeStyle = "rgba(255,255,255,0.85)";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(Math.round(e.anchorX) + 0.5, 0);
+      ctx.lineTo(Math.round(e.handX) + 0.5, Math.round(e.handY) + 2);
+      ctx.stroke();
+      // quantised rotation so he leans into the swing without smearing pixels
+      const step = Math.PI / 12;
+      const angle = Math.round(e.angle / step) * step;
+      ctx.save();
+      ctx.translate(Math.round(e.handX), Math.round(e.handY));
+      ctx.rotate(-angle);
+      ctx.drawImage(spiderSprite, -spiderSprite.width / 2, 0);
+      ctx.restore();
     } else if (e.kind === "can") {
       // a wobble instead of a real rotation keeps the pixels crisp
       const wobble = Math.sin(e.spin) > 0 ? 1 : -1;
@@ -1086,7 +1171,7 @@
   // ------------------------------------------------------------------ buttons
   // Rebuilt from the current state, so the same list drives drawing and taps.
   function uiButtons() {
-    if (game.dialogOpen) return [];
+    if (game.dialogOpen || game.state === STATE.LOADING) return [];
     if (game.paused) {
       return [{ id: "resume", x: 60, y: 268, w: 200, h: 32, label: "продолжить", primary: true }];
     }
@@ -1111,7 +1196,10 @@
         // every found photo is tappable, so you can look at it properly
         for (const cell of collectionCells()) {
           if (Collection.has(cell.slot)) {
-            list.push({ id: "cell:" + cell.slot, x: cell.x, y: cell.y, w: CELL, h: CELL, invisible: true });
+            list.push({
+              id: "cell:" + cell.slot, x: cell.x, y: cell.y,
+              w: cell.cell, h: cell.cell, invisible: true,
+            });
           }
         }
       }
@@ -1231,15 +1319,17 @@
     panel(38, 186, W - 76, 110);
     drawText(ctx, "враги", W / 2, 192, { scale: 1, color: COLORS.ink, align: "center" });
     const icons = [
-      [colaTiny, "кола", 54],
-      [gullTiny, "чайка", 108],
-      [canTiny, "банка", 158],
-      [droneTiny, "дрон", 202],
+      [colaTiny, "кола"],
+      [gullTiny, "чайка"],
+      [spiderTiny, "паук"],
+      [canTiny, "банка"],
+      [droneTiny, "дрон"],
     ];
-    for (const [img, label, ix] of icons) {
-      ctx.drawImage(img, ix, 204 + (16 - img.height / 2));
-      drawText(ctx, label, ix + img.width / 2, 238, { scale: 1, color: COLORS.ink, align: "center" });
-    }
+    icons.forEach(([img, label], i) => {
+      const cx = 56 + i * 52;
+      ctx.drawImage(img, Math.round(cx - img.width / 2), Math.round(220 - img.height / 2));
+      drawText(ctx, label, cx, 238, { scale: 1, color: COLORS.ink, align: "center" });
+    });
     ctx.fillStyle = "#e4d5b4";
     ctx.fillRect(48, 246, W - 96, 2);
     ctx.drawImage(katyTiny, 58, 254);
@@ -1365,24 +1455,40 @@
     drawText(ctx, label, W / 2, py + pw + 12, {
       scale: label.length > 14 ? 1 : 2, color: COLORS.ink, align: "center",
     });
-    drawText(ctx, cp.isNew ? cp.caption : cp.cheer, W / 2, py + pw + 34, {
-      scale: 1, color: "#c41f77", align: "center",
-    });
+    if (!cp.isNew) {
+      drawText(ctx, cp.cheer, W / 2, py + pw + 34, {
+        scale: 1, color: "#c41f77", align: "center",
+      });
+    }
 
   }
 
   // "Коллекция Лёш": a grid of finds, tap one to see it big.
-  const CELL = 84;
-  const CELL_GAP = 10;
-  const GRID_X = (W - (CELL * 3 + CELL_GAP * 2)) / 2;
   const GRID_Y = 92;
 
+  // Three big tiles per row while they fit, four smaller ones once the
+  // collection outgrows three rows.
+  function gridLayout() {
+    const count = Collection.all().length;
+    const cols = count > 9 ? 4 : 3;
+    const cell = cols === 3 ? 84 : 62;
+    const gap = 10;
+    return {
+      cols: cols,
+      cell: cell,
+      x: (W - (cell * cols + gap * (cols - 1))) / 2,
+      step: cell + gap,
+      rowStep: cell + 22,
+    };
+  }
+
   function collectionCells() {
-    const all = Collection.all();
-    return all.map((slot, i) => ({
+    const g = gridLayout();
+    return Collection.all().map((slot, i) => ({
       slot: slot,
-      x: GRID_X + (i % 3) * (CELL + CELL_GAP),
-      y: GRID_Y + Math.floor(i / 3) * (CELL + 24),
+      cell: g.cell,
+      x: g.x + (i % g.cols) * g.step,
+      y: GRID_Y + Math.floor(i / g.cols) * g.rowStep,
     }));
   }
 
@@ -1416,30 +1522,27 @@
       drawText(ctx, title, W / 2, fy + pw + 22, {
         scale: title.length > 14 ? 1 : 2, color: COLORS.ink, align: "center",
       });
-      drawText(ctx, CHECKPOINTS.captions[slot] || "", W / 2, fy + pw + 44, {
-        scale: 1, color: "#c41f77", align: "center",
-      });
       return;
     }
 
     for (const cell of collectionCells()) {
-      const found = Collection.has(cell.slot);
+      const size = cell.cell;
       ctx.fillStyle = COLORS.ink;
-      ctx.fillRect(cell.x - 2, cell.y - 2, CELL + 4, CELL + 4);
-      if (found) {
+      ctx.fillRect(cell.x - 2, cell.y - 2, size + 4, size + 4);
+      if (Collection.has(cell.slot)) {
         ctx.fillStyle = "#fffdf6";
-        ctx.fillRect(cell.x, cell.y, CELL, CELL);
-        drawPhoto(cell.slot, cell.x + 3, cell.y + 3, CELL - 6);
-        drawText(ctx, photoName(cell.slot), cell.x + CELL / 2, cell.y + CELL + 6, {
+        ctx.fillRect(cell.x, cell.y, size, size);
+        drawPhoto(cell.slot, cell.x + 3, cell.y + 3, size - 6);
+        drawText(ctx, photoName(cell.slot), cell.x + size / 2, cell.y + size + 5, {
           scale: 1, color: COLORS.paper, align: "center", outline: COLORS.ink,
         });
       } else {
         ctx.fillStyle = "#2c1b44";
-        ctx.fillRect(cell.x, cell.y, CELL, CELL);
-        drawText(ctx, "?", cell.x + CELL / 2, cell.y + CELL / 2 - 14, {
+        ctx.fillRect(cell.x, cell.y, size, size);
+        drawText(ctx, "?", cell.x + size / 2, cell.y + size / 2 - 14, {
           scale: 4, color: "#5a4577", align: "center",
         });
-        drawText(ctx, "не найден", cell.x + CELL / 2, cell.y + CELL + 6, {
+        drawText(ctx, "не найден", cell.x + size / 2, cell.y + size + 5, {
           scale: 1, color: "#8a77ad", align: "center",
         });
       }
@@ -1489,6 +1592,32 @@
     }
   }
 
+  function drawLoading() {
+    drawText(ctx, "flappy", W / 2, 120, { scale: 4, color: "#ffd447", align: "center", outline: COLORS.ink });
+    drawText(ctx, "lesha", W / 2, 156, { scale: 4, color: "#ff3ea5", align: "center", outline: COLORS.ink });
+
+    drawHero(W / 2 - HERO_SIZE / 2);
+
+    const bw = 200;
+    const bx = (W - bw) / 2;
+    const by = 240;
+    ctx.fillStyle = COLORS.ink;
+    ctx.fillRect(bx - 3, by - 3, bw + 6, 22);
+    ctx.fillStyle = "#2c1b44";
+    ctx.fillRect(bx, by, bw, 16);
+    ctx.fillStyle = "#ff3ea5";
+    ctx.fillRect(bx, by, Math.round(bw * loadingProgress()), 16);
+    ctx.fillStyle = "#ffd447";
+    ctx.fillRect(bx, by, Math.round(bw * loadingProgress()), 4);
+
+    drawText(ctx, "загрузка " + Math.round(loadingProgress() * 100) + "%", W / 2, 272, {
+      scale: 1, color: COLORS.paper, align: "center", outline: COLORS.ink,
+    });
+    drawText(ctx, "готовим лёш", W / 2, 292, {
+      scale: 1, color: "#b9a9d6", align: "center", outline: COLORS.ink,
+    });
+  }
+
   function render() {
     ctx.save();
     if (game.shake > 0) {
@@ -1501,11 +1630,12 @@
     for (const e of enemies) drawEnemy(e);
     for (const b of bonuses) drawBonus(b);
     if (game.state !== STATE.TITLE && game.state !== STATE.BOARD &&
-        game.state !== STATE.COLLECTION) drawHero();
+        game.state !== STATE.COLLECTION && game.state !== STATE.LOADING) drawHero();
     drawParticles();
     drawTiled(groundTile, game.scroll, GROUND_Y);
     drawPopups();
 
+    if (game.state === STATE.LOADING) drawLoading();
     if (game.state === STATE.TITLE) drawTitle();
     if (game.state === STATE.OVER) drawGameOver();
     if (game.state === STATE.BOARD) drawBoard();
@@ -1531,7 +1661,7 @@
   // -------------------------------------------------------------------- input
   function press() {
     Sfx.unlock();
-    if (game.dialogOpen || game.paused) return;
+    if (game.dialogOpen || game.paused || game.state === STATE.LOADING) return;
     if (game.state === STATE.BOARD) { closeBoard(); return; }
     if (game.state === STATE.CHECKPOINT) {
       if (game.checkpointTimer > 0.5) leaveCheckpoint();
@@ -1629,7 +1759,7 @@
   Collection.use(game.player);
   loadBoard(false);
   Scores.retryPending();
-  if (!game.player) askName(true);
+  // the name dialog waits until the photos are in - see finishLoading()
 
   // Small hook so the game can be driven from a script (used by the smoke test).
   window.FlappyLesha = {
@@ -1650,6 +1780,7 @@
     checkpoint: currentCheckpoint,
     openCollection: openCollection,
     collection: () => Collection,
+    loading: () => ({ total: loading.total, done: loading.done, progress: loadingProgress() }),
     loadBoard: loadBoard,
     gapSize: gapSize,
     speed: speed,

@@ -29,9 +29,11 @@ const INSECURE = !!process.env.SMOKE_INSECURE;
   });
 
   await page.goto(URL);
-  await page.waitForTimeout(600);
-
-  // the game asks who is playing before anything else
+  // the photos are preloaded first, then the game asks who is playing
+  await page.waitForFunction(
+    () => window.FlappyLesha && window.FlappyLesha.game.state !== window.FlappyLesha.STATE.LOADING,
+    null, { timeout: 30000 });
+  await page.waitForTimeout(300);
   const dialogVisible = await page.isVisible("#dialog:not(.hidden)");
   if (dialogVisible) {
     await page.fill("#nameInput", "БОТ");
@@ -118,6 +120,7 @@ const INSECURE = !!process.env.SMOKE_INSECURE;
     photos: Object.keys(CHECKPOINT_IMAGES).length,
     frames: Object.values(CHECKPOINT_IMAGES).reduce((n, f) => n + f.length, 0),
     collected: window.FlappyLesha.collection().count(),
+    assets: window.FlappyLesha.loading(),
   })).catch(() => ({ rows: 0, source: "?", player: "", photos: 0, frames: 0 }));
 
   const checks = [
@@ -132,6 +135,8 @@ const INSECURE = !!process.env.SMOKE_INSECURE;
       Object.keys(stats.enemyKinds).join(",") || "none"],
     ["game over works", stats.overSeen >= 1, "deaths " + stats.deaths],
     ["лёши bundled", board.photos >= 1, board.photos + " лёш(и), " + board.frames + " frame(s)"],
+    ["assets preloaded before play", board.assets && board.assets.done === board.assets.total,
+      board.assets ? board.assets.done + "/" + board.assets.total : "?"],
     ["checkpoint screen shows up", stats.maxScore < 10 || stats.checkpoints >= 1,
       "seen " + stats.checkpoints + " at best score " + stats.maxScore],
     ["collection picks up finds", stats.checkpoints === 0 || stats.newFinds >= 1,
