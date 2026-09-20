@@ -100,19 +100,20 @@ def main():
     draw_text(card, glyphs, "lesha", left, 215, 11, (255, 62, 165))
 
     lines = [
-        ("8-БИТНЫЙ ФЛАППИ БЁРД,", (255, 246, 224)),
-        ("ГДЕ ВМЕСТО ПТИЧКИ ЛЁША", (255, 246, 224)),
-        ("ЛОВИ ЖИЗНИ, СОБИРАЙ ЛЁШ", (185, 169, 214)),
-        ("И ЛЕЗЬ В ОБЩИЙ РЕЙТИНГ", (185, 169, 214)),
+        ("8-БИТНЫЙ ФЛАППИ БЁРД,", (255, 246, 224), 4),
+        ("ГДЕ ВМЕСТО ПТИЧКИ -", (255, 246, 224), 4),
+        ("НАШ ГЛАВНЫЙ ГЕРОЙ - ЛЕША!", (255, 212, 71), 4),
+        ("ЛОВИ ЖИЗНИ, СОБИРАЙ ЛЕШ", (185, 169, 214), 3),
+        ("И СОРЕВНУЙСЯ В ОБЩЕМ РЕЙТИНГЕ", (185, 169, 214), 3),
     ]
-    y = 326
-    for i, (text, color) in enumerate(lines):
-        if i == 2:
-            y += 18                                      # a beat between the two pairs
-        draw_text(card, glyphs, text, left, y, 4, color)
-        y += 38
+    y = 306
+    for i, (text, color, scale) in enumerate(lines):
+        if i == 3:
+            y += 22                                      # a beat before the second pair
+        draw_text(card, glyphs, text, left, y, scale, color)
+        y += 36 if scale == 4 else 28
 
-    row_y = 500
+    row_y = 516
     x = left
     for name, scale in (("katy", 3), ("colaCap", 2), ("gullUp", 3), ("spider", 3), ("mac", 3)):
         sp = sprite_image(sprites, name, scale)
