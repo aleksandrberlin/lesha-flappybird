@@ -185,6 +185,12 @@
     return (CHECKPOINTS.names && CHECKPOINTS.names[slot]) || ("№" + slot);
   }
 
+  // The big screens pick the largest size the name actually fits in, rather
+  // than guessing from how many characters it has.
+  function titleScale(text, maxWidth) {
+    return textWidth(String(text).toUpperCase(), 2) <= maxWidth ? 2 : 1;
+  }
+
   function photoTitle(slot) {
     return (CHECKPOINTS.titles && CHECKPOINTS.titles[slot]) || photoName(slot);
   }
@@ -1491,7 +1497,7 @@
     ctx.strokeRect(px + 0.5, py + 0.5, pw - 1, pw - 1);
 
     drawText(ctx, cp.title, W / 2, py + pw + 12, {
-      scale: cp.title.length > 14 ? 1 : 2, color: COLORS.ink, align: "center",
+      scale: titleScale(cp.title, fw - 16), color: COLORS.ink, align: "center",
     });
     if (!cp.isNew) {
       drawText(ctx, cp.cheer, W / 2, py + pw + 34, {
@@ -1558,7 +1564,7 @@
       drawPhoto(slot, fx + 10, fy + 10, pw);
       const title = photoTitle(slot);
       drawText(ctx, title, W / 2, fy + pw + 22, {
-        scale: title.length > 14 ? 1 : 2, color: COLORS.ink, align: "center",
+        scale: titleScale(title, fw - 16), color: COLORS.ink, align: "center",
       });
       return;
     }
