@@ -21,11 +21,14 @@ python3 -m http.server 8000     # затем http://localhost:8000
 # или просто открыть index.html в браузере
 ```
 
-В репозитории лежит workflow `.github/workflows/pages.yml`: после пуша в
-`main` игра публикуется на GitHub Pages. Один раз нужно включить это в
-настройках репозитория — **Settings → Pages → Source: GitHub Actions**,
-после чего игра будет доступна по адресу вида
-`https://<логин>.github.io/lesha-flappybird/` — с компьютера и с телефона.
+Игра — статика без сборки, поэтому на GitHub Pages она раздаётся прямо из
+ветки: **Settings → Pages → Source: Deploy from a branch → `main` / `/ (root)`**.
+После этого она открывается по адресу вида
+`https://aleksandrberlin.github.io/lesha-flappybird/` — и с компьютера, и с
+телефона. Файл `.nojekyll` отключает лишнюю обработку Jekyll.
+
+Отдельный workflow для деплоя не нужен: собирать нечего. Он понадобился бы,
+только если появится шаг сборки или захочется публиковать не весь репозиторий.
 
 ## Управление
 
